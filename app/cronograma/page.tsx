@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -26,7 +28,7 @@ type UniEvent = {
   subject_id: string;
   title: string;
   type: "evaluado_entrega" | "reunion" | "teorica";
-  date: string;
+  date: string; // YYYY-MM-DD
   weight_percent: number | null;
 };
 
@@ -35,6 +37,10 @@ function chipClass(t: UniEvent["type"]) {
   if (t === "reunion") return "bg-yellow-300 text-black";
   return "bg-green-600 text-white";
 }
+
+// Color pro para “HOY”
+const TODAY_HEAD = "bg-indigo-50 ring-1 ring-indigo-200";
+const TODAY_CELL = "bg-indigo-50/60 ring-1 ring-inset ring-indigo-200";
 
 export default function CronogramaPage() {
   const router = useRouter();
@@ -45,6 +51,9 @@ export default function CronogramaPage() {
   const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
   const monday = useMemo(() => startOfWeekMonday(weekAnchor), [weekAnchor]);
   const weekLabel = useMemo(() => formatHeaderRange(monday), [monday]);
+
+  // ✅ ISO del día actual (para resaltar columna)
+  const todayISO = useMemo(() => formatISODate(new Date()), []);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [events, setEvents] = useState<UniEvent[]>([]);
@@ -264,7 +273,7 @@ export default function CronogramaPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header compacto */}
+        {/* HEADER COMPACTO */}
         <div className="bg-white rounded-2xl shadow p-3 sm:p-5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -274,7 +283,13 @@ export default function CronogramaPage() {
               <p className="text-[11px] sm:text-sm text-gray-500 truncate">
                 {weekLabel}
               </p>
+              {email && (
+                <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                  {email}
+                </p>
+              )}
             </div>
+
             <button
               onClick={handleLogout}
               className="rounded-xl border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-gray-100"
@@ -311,11 +326,12 @@ export default function CronogramaPage() {
           </div>
 
           <p className="mt-1 text-[11px] text-gray-500">
-            Tip: deslizá la tabla a los lados (como Excel).
+            Tip: deslizá la tabla a los lados (como Excel). El día de hoy queda
+            resaltado.
           </p>
         </div>
 
-        {/* Tabla */}
+        {/* TABLA */}
         <div className="mt-3 bg-white rounded-2xl shadow overflow-hidden">
           <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
             <table className="min-w-[760px] sm:min-w-[860px] w-full border-collapse">
@@ -328,7 +344,10 @@ export default function CronogramaPage() {
                   {weekDays.map((d) => (
                     <th
                       key={d.iso}
-                      className="px-1.5 py-2 border-b text-center min-w-1 sm:min-w-36"
+                      className={[
+                        "px-1.5 py-2 border-b text-center min-w-24 sm:min-w-36",
+                        d.iso === todayISO ? TODAY_HEAD : "",
+                      ].join(" ")}
                     >
                       <div className="font-semibold text-xs sm:text-sm">
                         {d.dowLabel}
@@ -337,6 +356,11 @@ export default function CronogramaPage() {
                         {d.monthLabel}
                       </div>
                       <div className="text-xs sm:text-sm">{d.dayNum}</div>
+                      {d.iso === todayISO && (
+                        <div className="mt-1 text-[10px] font-semibold text-indigo-700">
+                          HOY
+                        </div>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -365,13 +389,22 @@ export default function CronogramaPage() {
                       {weekDays.map((d) => {
                         const cellEvents = eventsForCell(s.id, d.iso);
                         const visible = cellEvents.slice(0, 2);
-                        const hiddenCount = Math.max(0, cellEvents.length - visible.length);
+                        const hiddenCount = Math.max(
+                          0,
+                          cellEvents.length - visible.length
+                        );
 
                         return (
                           <td
                             key={d.iso}
-                            className="px-1.5 py-2 align-top border-r border-gray-100 hover:bg-gray-50 cursor-pointer"
+                            className={[
+                              "px-1.5 py-2 align-top border-r border-gray-100 cursor-pointer",
+                              d.iso === todayISO
+                                ? TODAY_CELL
+                                : "hover:bg-gray-50",
+                            ].join(" ")}
                             onClick={() => openAddModal(s.id, d.iso)}
+                            title="Tocar para agregar"
                           >
                             <div className="min-h-[64px]">
                               <div className="flex flex-col gap-1">
@@ -389,9 +422,12 @@ export default function CronogramaPage() {
                                       "whitespace-normal break-words",
                                       chipClass(e.type),
                                     ].join(" ")}
+                                    title="Editar / borrar"
                                   >
                                     {e.title}
-                                    {e.weight_percent != null ? ` (${e.weight_percent}%)` : ""}
+                                    {e.weight_percent != null
+                                      ? ` (${e.weight_percent}%)`
+                                      : ""}
                                   </button>
                                 ))}
 
@@ -403,6 +439,7 @@ export default function CronogramaPage() {
                                       openEditModal(cellEvents[visible.length]);
                                     }}
                                     className="text-[11px] text-gray-600 text-left underline"
+                                    title="Ver más"
                                   >
                                     +{hiddenCount} más
                                   </button>
@@ -419,6 +456,7 @@ export default function CronogramaPage() {
             </table>
           </div>
 
+          {/* Leyenda */}
           <div className="p-3 border-t text-xs text-gray-600 flex flex-wrap gap-3">
             <span className="flex items-center gap-2">
               <span className="w-3 h-3 rounded bg-red-600 inline-block" />
@@ -432,11 +470,15 @@ export default function CronogramaPage() {
               <span className="w-3 h-3 rounded bg-green-600 inline-block" />
               Teórica
             </span>
+            <span className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-indigo-200 inline-block" />
+              Hoy
+            </span>
           </div>
         </div>
       </div>
 
-      {/* ✅ MODAL (agregar) ARREGLADO EN MÓVIL */}
+      {/* ✅ MODAL (agregar) */}
       {modalOpen && (
         <div
           className="fixed inset-0 z-[9999] bg-black/50 flex items-end sm:items-center justify-center p-3 sm:p-4"
@@ -514,7 +556,7 @@ export default function CronogramaPage() {
         </div>
       )}
 
-      {/* ✅ MODAL (editar) ARREGLADO EN MÓVIL */}
+      {/* ✅ MODAL (editar/borrar) */}
       {editOpen && editing && (
         <div
           className="fixed inset-0 z-[9999] bg-black/50 flex items-end sm:items-center justify-center p-3 sm:p-4"
@@ -559,7 +601,9 @@ export default function CronogramaPage() {
                 <select
                   className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring bg-white"
                   value={editType}
-                  onChange={(e) => setEditType(e.target.value as UniEvent["type"])}
+                  onChange={(e) =>
+                    setEditType(e.target.value as UniEvent["type"])
+                  }
                 >
                   <option value="evaluado_entrega">Evaluado / Entrega (Rojo)</option>
                   <option value="reunion">Reunión (Amarillo)</option>
