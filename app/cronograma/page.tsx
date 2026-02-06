@@ -447,9 +447,10 @@ export default function CronogramaPage() {
                         }}
                       >
                         {/* Materia */}
-                        <div className="sticky left-0 z-10 bg-white px-3 py-4 border-r border-gray-300 font-semibold">
-                          {s.code}
-                        </div>
+                        <div className="sticky left-0 z-10 bg-white px-3 py-4 border-r border-gray-300 border-b border-gray-300 font-semibold h-full">
+  {s.code}
+</div>
+
 
                         {/* 7 celdas */}
                         {weekDays.map((d) => (
@@ -467,27 +468,33 @@ export default function CronogramaPage() {
 
                       {/* Overlay barras ABSOLUTO */}
                       <div
-                        className="pointer-events-none absolute inset-0"
-                        style={{
-                          paddingLeft: subjectColWidth,
-                        }}
-                      >
-                        {bars.map((b) => {
-                          const startCol = b.startIdx + 1; // 1..7
-                          const endCol = b.endIdx + 2; // exclusivo
-                          const top = 12 + b.lane * laneHeight;
+  className="pointer-events-none absolute inset-0"
+  style={{
+    left: subjectColWidth,
+    right: 0,
+  }}
+>
+  {bars.map((b) => {
+    const startCol = b.startIdx + 1;
+    const endCol = b.endIdx + 2;
+    const top = 12 + b.lane * laneHeight;
 
-                          return (
-                            <div
-                              key={b.id}
-                              className="absolute left-0 right-0"
-                              style={{
-                                top,
-                                display: "grid",
-                                gridTemplateColumns: `repeat(7, minmax(${dayMinWidth}px, 1fr))`,
-                                padding: "0 10px",
-                              }}
-                            >
+    return (
+      <div
+        key={b.id}
+        className="absolute left-0 right-0"
+        style={{
+          top,
+          display: "grid",
+          gridTemplateColumns: `repeat(7, minmax(${dayMinWidth}px, 1fr))`,
+        }}
+      >
+
+
+
+
+
+
                               <button
                                 type="button"
                                 onClick={(evt) => {
