@@ -385,9 +385,7 @@ export default function CronogramaPage() {
             </button>
           </div>
 
-          <p className="mt-1 text-[11px] text-gray-500">
-            Tip: deslizá horizontal (como Excel). Tocá celda vacía = agregar. Tocá barra = editar/borrar.
-          </p>
+          
         </div>
 
         {/* GRID */}
