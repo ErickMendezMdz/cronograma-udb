@@ -350,8 +350,8 @@ export default function CronogramaPage() {
   }
 
   // Ajustes visuales
-  const subjectColWidth = 120; // px
-  const dayMinWidth = 140; // px
+  const subjectColWidth = 90; // px
+  const dayMinWidth = 90; // px
   const laneHeight = 30; // px
   const baseRowHeight = 110; // px
 
