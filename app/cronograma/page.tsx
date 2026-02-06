@@ -26,7 +26,8 @@ type UniEvent = {
   subject_id: string;
   title: string;
   type: "evaluado_entrega" | "reunion" | "teorica";
-  date: string; // YYYY-MM-DD
+  date: string; // start YYYY-MM-DD
+  end_date: string; // end YYYY-MM-DD
   weight_percent: number | null;
 };
 
@@ -36,7 +37,49 @@ function chipClass(t: UniEvent["type"]) {
   return "bg-green-600 text-white";
 }
 
-// Color pro para “HOY”
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+// diff días entre fecha ISO y un Date base (lunes)
+function dayIndexFromMonday(iso: string, monday: Date) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const ms = dt.getTime() - monday.getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+type Bar = UniEvent & {
+  startIdx: number; // 0..6
+  endIdx: number; // 0..6
+  lane: number; // 0..n
+};
+
+// asigna lanes para que barras solapadas se apilen
+function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
+  // ordenar por inicio, luego por fin
+  const sorted = [...bars].sort((a, b) =>
+    a.startIdx !== b.startIdx ? a.startIdx - b.startIdx : a.endIdx - b.endIdx
+  );
+
+  const laneEnds: number[] = []; // por lane, el último endIdx usado
+  const out: Bar[] = [];
+
+  for (const b of sorted) {
+    let lane = 0;
+    while (true) {
+      if (laneEnds[lane] == null || laneEnds[lane] < b.startIdx) {
+        laneEnds[lane] = b.endIdx;
+        out.push({ ...b, lane });
+        break;
+      }
+      lane++;
+    }
+  }
+  return out;
+}
+
+// colores pro para HOY
 const TODAY_HEAD = "bg-indigo-50 ring-1 ring-indigo-200";
 const TODAY_CELL = "bg-indigo-50/60 ring-1 ring-inset ring-indigo-200";
 
@@ -49,30 +92,31 @@ export default function CronogramaPage() {
   const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
   const monday = useMemo(() => startOfWeekMonday(weekAnchor), [weekAnchor]);
   const weekLabel = useMemo(() => formatHeaderRange(monday), [monday]);
-
-  // ✅ ISO del día actual (para resaltar columna)
   const todayISO = useMemo(() => formatISODate(new Date()), []);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [events, setEvents] = useState<UniEvent[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  // Modal: agregar
+  // Modal agregar
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalSubjectId, setModalSubjectId] = useState<string>("");
-  const [modalDate, setModalDate] = useState<string>("");
+  const [modalSubjectId, setModalSubjectId] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [title, setTitle] = useState("");
   const [type, setType] = useState<UniEvent["type"]>("teorica");
   const [weight, setWeight] = useState<string>("");
 
-  // Modal: editar/borrar
+  // Modal editar
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<UniEvent | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editType, setEditType] = useState<UniEvent["type"]>("teorica");
   const [editWeight, setEditWeight] = useState<string>("");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
 
-  // ✅ Bloquear scroll del fondo cuando haya modal (móvil friendly)
+  // bloquear scroll cuando hay modal (móvil)
   useEffect(() => {
     if (modalOpen || editOpen) {
       const prev = document.body.style.overflow;
@@ -117,17 +161,18 @@ export default function CronogramaPage() {
       setLoadingData(false);
       return;
     }
-
     setSubjects((subj ?? []) as Subject[]);
 
+    // traer eventos que SOLAPAN con la semana:
+    // start_date < finSemana y end_date >= inicioSemana
     const start = formatISODate(monday);
     const endExclusive = formatISODate(addDays(monday, 7));
 
     const { data: ev, error: e2 } = await supabase
       .from("uni_events")
-      .select("id, subject_id, title, type, date, weight_percent")
-      .gte("date", start)
-      .lt("date", endExclusive);
+      .select("id, subject_id, title, type, date, end_date, weight_percent")
+      .lt("date", endExclusive)
+      .gte("end_date", start);
 
     if (e2) {
       alert(e2.message);
@@ -135,7 +180,13 @@ export default function CronogramaPage() {
       return;
     }
 
-    setEvents((ev ?? []) as UniEvent[]);
+    // normalizar end_date si viniera null por datos viejos
+    const normalized = (ev ?? []).map((x: any) => ({
+      ...x,
+      end_date: x.end_date ?? x.date,
+    }));
+
+    setEvents(normalized as UniEvent[]);
     setLoadingData(false);
   }
 
@@ -156,15 +207,10 @@ export default function CronogramaPage() {
     });
   }, [monday]);
 
-  function eventsForCell(subjectId: string, iso: string) {
-    return events
-      .filter((e) => e.subject_id === subjectId && e.date === iso)
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }
-
-  function openAddModal(subjectId: string, dateISO: string) {
+  function openAddModal(subjectId: string, iso: string) {
     setModalSubjectId(subjectId);
-    setModalDate(dateISO);
+    setStartDate(iso);
+    setEndDate(iso);
     setTitle("");
     setType("teorica");
     setWeight("");
@@ -174,15 +220,15 @@ export default function CronogramaPage() {
   async function saveEvent() {
     if (!title.trim()) return alert("Poné un título.");
 
+    const end = endDate || startDate;
+    if (end < startDate) return alert("La fecha 'Hasta' no puede ser menor al inicio.");
+
     const { data: sessionData } = await supabase.auth.getSession();
     const user = sessionData.session?.user;
     if (!user) return;
 
     const weightNum = weight.trim() ? Number(weight) : null;
-    if (
-      weightNum !== null &&
-      (Number.isNaN(weightNum) || weightNum < 0 || weightNum > 100)
-    ) {
+    if (weightNum !== null && (Number.isNaN(weightNum) || weightNum < 0 || weightNum > 100)) {
       return alert("El % debe ser un número entre 0 y 100 (o vacío).");
     }
 
@@ -191,7 +237,8 @@ export default function CronogramaPage() {
       subject_id: modalSubjectId,
       title: title.trim(),
       type,
-      date: modalDate,
+      date: startDate,
+      end_date: end,
       weight_percent: weightNum,
     });
 
@@ -206,18 +253,20 @@ export default function CronogramaPage() {
     setEditTitle(ev.title);
     setEditType(ev.type);
     setEditWeight(ev.weight_percent != null ? String(ev.weight_percent) : "");
+    setEditStart(ev.date);
+    setEditEnd(ev.end_date ?? ev.date);
     setEditOpen(true);
   }
 
   async function updateEvent() {
     if (!editing) return;
+
     if (!editTitle.trim()) return alert("Poné un título.");
+    const end = editEnd || editStart;
+    if (end < editStart) return alert("La fecha 'Hasta' no puede ser menor al inicio.");
 
     const weightNum = editWeight.trim() ? Number(editWeight) : null;
-    if (
-      weightNum !== null &&
-      (Number.isNaN(weightNum) || weightNum < 0 || weightNum > 100)
-    ) {
+    if (weightNum !== null && (Number.isNaN(weightNum) || weightNum < 0 || weightNum > 100)) {
       return alert("El % debe ser un número entre 0 y 100 (o vacío).");
     }
 
@@ -226,6 +275,8 @@ export default function CronogramaPage() {
       .update({
         title: editTitle.trim(),
         type: editType,
+        date: editStart,
+        end_date: end,
         weight_percent: weightNum,
       })
       .eq("id", editing.id);
@@ -260,32 +311,50 @@ export default function CronogramaPage() {
     }
   }
 
+  // construir barras por materia para la semana actual
+  const barsBySubject = useMemo(() => {
+    const map = new Map<string, Bar[]>();
+
+    for (const s of subjects) {
+      const list = events
+        .filter((e) => e.subject_id === s.id)
+        .map((e) => {
+          const startIdx = clamp(dayIndexFromMonday(e.date, monday), 0, 6);
+          const endIdx = clamp(dayIndexFromMonday(e.end_date ?? e.date, monday), 0, 6);
+          return {
+            ...e,
+            startIdx: Math.min(startIdx, endIdx),
+            endIdx: Math.max(startIdx, endIdx),
+          };
+        });
+
+      const withLanes = assignLanes(list as any);
+      map.set(s.id, withLanes);
+    }
+
+    return map;
+  }, [events, subjects, monday]);
+
   if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Cargando...
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
   }
+
+  // Ajustes visuales (tamaño de celda y alturas)
+  const subjectColWidth = 92; // px (col materias)
+  const dayMinWidth = 96; // px (cada día)
+  const laneHeight = 28; // px (altura por fila de barra)
+  const baseRowHeight = 88; // px (mínimo para que se vea “excel”)
 
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
       <div className="max-w-7xl mx-auto">
-        {/* HEADER COMPACTO */}
+        {/* HEADER */}
         <div className="bg-white rounded-2xl shadow p-3 sm:p-5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-semibold truncate">
-                Cronograma
-              </h1>
-              <p className="text-[11px] sm:text-sm text-gray-500 truncate">
-                {weekLabel}
-              </p>
-              {email && (
-                <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                  {email}
-                </p>
-              )}
+              <h1 className="text-base sm:text-xl font-semibold truncate">Cronograma</h1>
+              <p className="text-[11px] sm:text-sm text-gray-500 truncate">{weekLabel}</p>
+              {email && <p className="text-[11px] text-gray-400 truncate mt-0.5">{email}</p>}
             </div>
 
             <button
@@ -324,134 +393,142 @@ export default function CronogramaPage() {
           </div>
 
           <p className="mt-1 text-[11px] text-gray-500">
-            Tip: deslizá la tabla a los lados (como Excel). El día de hoy queda
-            resaltado.
+            Tip: deslizá horizontal (como Excel). Tocá celda vacía = agregar. Tocá barra = editar/borrar.
           </p>
         </div>
 
-        {/* TABLA */}
+        {/* GRID */}
         <div className="mt-3 bg-white rounded-2xl shadow overflow-hidden">
           <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-            <table className="min-w-[760px] sm:min-w-[860px] w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="sticky left-0 bg-gray-100 z-20 text-left px-2 py-2 border-b w-20 sm:w-44 text-sm">
-                    Materias
-                  </th>
+            <div style={{ minWidth: subjectColWidth + 7 * dayMinWidth }}>
+              {/* Header grid */}
+              <div
+                className="grid bg-gray-100 border-b"
+                style={{
+                  gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
+                }}
+              >
+                <div className="sticky left-0 z-20 bg-gray-100 px-2 py-3 font-semibold border-r">
+                  Materias
+                </div>
 
-                  {weekDays.map((d) => (
-                    <th
-                      key={d.iso}
-                      className={[
-                        "px-1.5 py-2 border-b text-center min-w-24 sm:min-w-36",
-                        d.iso === todayISO ? TODAY_HEAD : "",
-                      ].join(" ")}
+                {weekDays.map((d) => (
+                  <div
+                    key={d.iso}
+                    className={[
+                      "px-2 py-2 text-center border-l",
+                      d.iso === todayISO ? TODAY_HEAD : "",
+                    ].join(" ")}
+                  >
+                    <div className="font-semibold text-xs sm:text-sm">{d.dowLabel}</div>
+                    <div className="text-[10px] text-gray-500 capitalize">{d.monthLabel}</div>
+                    <div className="text-xs sm:text-sm">{d.dayNum}</div>
+                    {d.iso === todayISO && (
+                      <div className="mt-1 text-[10px] font-semibold text-indigo-700">HOY</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Body */}
+              {loadingData ? (
+                <div className="p-6 text-center text-gray-500">Cargando...</div>
+              ) : subjects.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  No hay materias. Dale a <b>“Cargar materias”</b>.
+                </div>
+              ) : (
+                subjects.map((s) => {
+                  const bars = barsBySubject.get(s.id) ?? [];
+                  const maxLane = bars.reduce((acc, b) => Math.max(acc, b.lane), -1);
+                  const rowHeight = Math.max(baseRowHeight, (maxLane + 1) * laneHeight + 24);
+
+                  return (
+                    <div
+                      key={s.id}
+                      className="grid border-b"
+                      style={{
+                        gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
+                      }}
                     >
-                      <div className="font-semibold text-xs sm:text-sm">
-                        {d.dowLabel}
-                      </div>
-                      <div className="text-[10px] text-gray-500 capitalize">
-                        {d.monthLabel}
-                      </div>
-                      <div className="text-xs sm:text-sm">{d.dayNum}</div>
-                      {d.iso === todayISO && (
-                        <div className="mt-1 text-[10px] font-semibold text-indigo-700">
-                          HOY
-                        </div>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {loadingData ? (
-                  <tr>
-                    <td colSpan={8} className="p-6 text-center text-gray-500">
-                      Cargando...
-                    </td>
-                  </tr>
-                ) : subjects.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-6 text-center text-gray-500">
-                      No hay materias. Dale a <b>“Cargar materias”</b>.
-                    </td>
-                  </tr>
-                ) : (
-                  subjects.map((s) => (
-                    <tr key={s.id} className="border-t">
-                      <td className="sticky left-0 bg-white z-10 px-2 py-2 border-r font-semibold text-sm">
+                      {/* Materia */}
+                      <div
+                        className="sticky left-0 z-10 bg-white px-2 py-3 border-r font-semibold"
+                        style={{ height: rowHeight }}
+                      >
                         {s.code}
-                      </td>
+                      </div>
 
-                      {weekDays.map((d) => {
-                        const cellEvents = eventsForCell(s.id, d.iso);
-                        const visible = cellEvents.slice(0, 2);
-                        const hiddenCount = Math.max(
-                          0,
-                          cellEvents.length - visible.length
-                        );
+                      {/* 7 celdas clickeables (fondo) */}
+                      {weekDays.map((d) => (
+                        <div
+                          key={d.iso}
+                          className={[
+                            "relative border-l hover:bg-gray-50 cursor-pointer",
+                            d.iso === todayISO ? TODAY_CELL : "",
+                          ].join(" ")}
+                          style={{ height: rowHeight }}
+                          onClick={() => openAddModal(s.id, d.iso)}
+                          title="Agregar actividad"
+                        />
+                      ))}
 
-                        return (
-                          <td
-                            key={d.iso}
-                            className={[
-                              "px-1.5 py-2 align-top border-r border-gray-100 cursor-pointer",
-                              d.iso === todayISO
-                                ? TODAY_CELL
-                                : "hover:bg-gray-50",
-                            ].join(" ")}
-                            onClick={() => openAddModal(s.id, d.iso)}
-                            title="Tocar para agregar"
-                          >
-                            <div className="min-h-[64px]">
-                              <div className="flex flex-col gap-1">
-                                {visible.map((e) => (
-                                  <button
-                                    key={e.id}
-                                    type="button"
-                                    onClick={(evt) => {
-                                      evt.stopPropagation();
-                                      openEditModal(e);
-                                    }}
-                                    className={[
-                                      "rounded-md px-2 py-1 text-left font-medium",
-                                      "text-[11px] leading-tight",
-                                      "whitespace-normal break-words",
-                                      chipClass(e.type),
-                                    ].join(" ")}
-                                    title="Editar / borrar"
-                                  >
-                                    {e.title}
-                                    {e.weight_percent != null
-                                      ? ` (${e.weight_percent}%)`
-                                      : ""}
-                                  </button>
-                                ))}
+                      {/* Overlay barras */}
+                      <div
+                        className="pointer-events-none"
+                        style={{
+                          gridColumn: "2 / 9",
+                          position: "relative",
+                          height: rowHeight,
+                        }}
+                      >
+                        {bars.map((b) => {
+                          const startCol = b.startIdx + 1; // 1..7
+                          const endCol = b.endIdx + 2; // exclusivo
+                          const top = 10 + b.lane * laneHeight;
 
-                                {hiddenCount > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={(evt) => {
-                                      evt.stopPropagation();
-                                      openEditModal(cellEvents[visible.length]);
-                                    }}
-                                    className="text-[11px] text-gray-600 text-left underline"
-                                    title="Ver más"
-                                  >
-                                    +{hiddenCount} más
-                                  </button>
-                                )}
-                              </div>
+                          return (
+                            <div
+                              key={b.id}
+                              className="absolute left-0 right-0"
+                              style={{
+                                top,
+                                display: "grid",
+                                gridTemplateColumns: `repeat(7, minmax(${dayMinWidth}px, 1fr))`,
+                                padding: "0 8px",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={(evt) => {
+                                  evt.stopPropagation();
+                                  openEditModal(b);
+                                }}
+                                className={[
+                                  "pointer-events-auto",
+                                  "rounded-md px-2 py-1 text-left font-medium",
+                                  "text-[11px] leading-tight",
+                                  "whitespace-normal break-words",
+                                  "shadow-sm",
+                                  chipClass(b.type),
+                                ].join(" ")}
+                                style={{
+                                  gridColumn: `${startCol} / ${endCol}`,
+                                }}
+                                title="Editar / borrar"
+                              >
+                                {b.title}
+                                {b.weight_percent != null ? ` (${b.weight_percent}%)` : ""}
+                              </button>
                             </div>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {/* Leyenda */}
@@ -476,7 +553,7 @@ export default function CronogramaPage() {
         </div>
       </div>
 
-      {/* ✅ MODAL (agregar) */}
+      {/* MODAL agregar */}
       {modalOpen && (
         <div
           className="fixed inset-0 z-[9999] bg-black/50 flex items-end sm:items-center justify-center p-3 sm:p-4"
@@ -488,17 +565,10 @@ export default function CronogramaPage() {
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Agregar actividad</h2>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg px-3 py-1 hover:bg-gray-100"
-              >
+              <button onClick={() => setModalOpen(false)} className="rounded-lg px-3 py-1 hover:bg-gray-100">
                 ✕
               </button>
             </div>
-
-            <p className="text-sm text-gray-500 mt-1">
-              Fecha: <b>{modalDate}</b>
-            </p>
 
             <div className="mt-4 space-y-3">
               <div>
@@ -509,6 +579,31 @@ export default function CronogramaPage() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ej: Parcial 1"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Desde</label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    value={startDate}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setStartDate(v);
+                      if (endDate < v) setEndDate(v);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Hasta</label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div>
@@ -542,10 +637,7 @@ export default function CronogramaPage() {
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={saveEvent}
-                  className="flex-1 rounded-xl bg-black text-white py-3 font-medium"
-                >
+                <button onClick={saveEvent} className="flex-1 rounded-xl bg-black text-white py-3 font-medium">
                   Guardar
                 </button>
               </div>
@@ -554,7 +646,7 @@ export default function CronogramaPage() {
         </div>
       )}
 
-      {/* ✅ MODAL (editar/borrar) */}
+      {/* MODAL editar */}
       {editOpen && editing && (
         <div
           className="fixed inset-0 z-[9999] bg-black/50 flex items-end sm:items-center justify-center p-3 sm:p-4"
@@ -580,10 +672,6 @@ export default function CronogramaPage() {
               </button>
             </div>
 
-            <p className="text-sm text-gray-500 mt-1">
-              Fecha: <b>{editing.date}</b>
-            </p>
-
             <div className="mt-4 space-y-3">
               <div>
                 <label className="text-sm font-medium">Título</label>
@@ -594,14 +682,37 @@ export default function CronogramaPage() {
                 />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Desde</label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    value={editStart}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEditStart(v);
+                      if (editEnd < v) setEditEnd(v);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Hasta</label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    value={editEnd}
+                    onChange={(e) => setEditEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-sm font-medium">Tipo</label>
                 <select
                   className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring bg-white"
                   value={editType}
-                  onChange={(e) =>
-                    setEditType(e.target.value as UniEvent["type"])
-                  }
+                  onChange={(e) => setEditType(e.target.value as UniEvent["type"])}
                 >
                   <option value="evaluado_entrega">Evaluado / Entrega (Rojo)</option>
                   <option value="reunion">Reunión (Amarillo)</option>
@@ -621,16 +732,10 @@ export default function CronogramaPage() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button
-                  onClick={deleteEvent}
-                  className="flex-1 rounded-xl border py-3 font-medium hover:bg-gray-100"
-                >
+                <button onClick={deleteEvent} className="flex-1 rounded-xl border py-3 font-medium hover:bg-gray-100">
                   Eliminar
                 </button>
-                <button
-                  onClick={updateEvent}
-                  className="flex-1 rounded-xl bg-black text-white py-3 font-medium"
-                >
+                <button onClick={updateEvent} className="flex-1 rounded-xl bg-black text-white py-3 font-medium">
                   Guardar cambios
                 </button>
               </div>
@@ -641,4 +746,3 @@ export default function CronogramaPage() {
     </div>
   );
 }
-
