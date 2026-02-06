@@ -41,7 +41,6 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-// diff días entre fecha ISO y un Date base (lunes)
 function dayIndexFromMonday(iso: string, monday: Date) {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
@@ -55,14 +54,12 @@ type Bar = UniEvent & {
   lane: number; // 0..n
 };
 
-// asigna lanes para que barras solapadas se apilen
 function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
-  // ordenar por inicio, luego por fin
   const sorted = [...bars].sort((a, b) =>
     a.startIdx !== b.startIdx ? a.startIdx - b.startIdx : a.endIdx - b.endIdx
   );
 
-  const laneEnds: number[] = []; // por lane, el último endIdx usado
+  const laneEnds: number[] = [];
   const out: Bar[] = [];
 
   for (const b of sorted) {
@@ -70,7 +67,7 @@ function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
     while (true) {
       if (laneEnds[lane] == null || laneEnds[lane] < b.startIdx) {
         laneEnds[lane] = b.endIdx;
-        out.push({ ...b, lane });
+        out.push({ ...(b as any), lane });
         break;
       }
       lane++;
@@ -79,7 +76,6 @@ function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
   return out;
 }
 
-// colores pro para HOY
 const TODAY_HEAD = "bg-indigo-50 ring-1 ring-indigo-200";
 const TODAY_CELL = "bg-indigo-50/60 ring-1 ring-inset ring-indigo-200";
 
@@ -163,8 +159,7 @@ export default function CronogramaPage() {
     }
     setSubjects((subj ?? []) as Subject[]);
 
-    // traer eventos que SOLAPAN con la semana:
-    // start_date < finSemana y end_date >= inicioSemana
+    // traer eventos que SOLAPAN con la semana
     const start = formatISODate(monday);
     const endExclusive = formatISODate(addDays(monday, 7));
 
@@ -180,7 +175,6 @@ export default function CronogramaPage() {
       return;
     }
 
-    // normalizar end_date si viniera null por datos viejos
     const normalized = (ev ?? []).map((x: any) => ({
       ...x,
       end_date: x.end_date ?? x.date,
@@ -311,7 +305,6 @@ export default function CronogramaPage() {
     }
   }
 
-  // construir barras por materia para la semana actual
   const barsBySubject = useMemo(() => {
     const map = new Map<string, Bar[]>();
 
@@ -339,11 +332,11 @@ export default function CronogramaPage() {
     return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
   }
 
-  // Ajustes visuales (tamaño de celda y alturas)
-  const subjectColWidth = 92; // px (col materias)
-  const dayMinWidth = 96; // px (cada día)
-  const laneHeight = 28; // px (altura por fila de barra)
-  const baseRowHeight = 88; // px (mínimo para que se vea “excel”)
+  // Ajustes visuales
+  const subjectColWidth = 120; // px
+  const dayMinWidth = 140; // px (podés bajar a 120 si querés más “compacto”)
+  const laneHeight = 30; // px
+  const baseRowHeight = 110; // px
 
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
@@ -403,12 +396,12 @@ export default function CronogramaPage() {
             <div style={{ minWidth: subjectColWidth + 7 * dayMinWidth }}>
               {/* Header grid */}
               <div
-                className="grid bg-gray-100 border-b"
+                className="grid bg-gray-100 border-b border-gray-300"
                 style={{
                   gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
                 }}
               >
-                <div className="sticky left-0 z-20 bg-gray-100 px-2 py-3 font-semibold border-r">
+                <div className="sticky left-0 z-20 bg-gray-100 px-3 py-4 font-semibold border-r border-gray-300">
                   Materias
                 </div>
 
@@ -416,7 +409,7 @@ export default function CronogramaPage() {
                   <div
                     key={d.iso}
                     className={[
-                      "px-2 py-2 text-center border-l",
+                      "px-2 py-3 text-center border-l border-gray-300",
                       d.iso === todayISO ? TODAY_HEAD : "",
                     ].join(" ")}
                   >
@@ -441,51 +434,48 @@ export default function CronogramaPage() {
                 subjects.map((s) => {
                   const bars = barsBySubject.get(s.id) ?? [];
                   const maxLane = bars.reduce((acc, b) => Math.max(acc, b.lane), -1);
-                  const rowHeight = Math.max(baseRowHeight, (maxLane + 1) * laneHeight + 24);
+                  const rowHeight = Math.max(baseRowHeight, (maxLane + 1) * laneHeight + 28);
 
                   return (
-                    <div
-                      key={s.id}
-                      className="grid border-b"
-                      style={{
-                        gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
-                      }}
-                    >
-                      {/* Materia */}
+                    <div key={s.id} className="relative border-b border-gray-300" style={{ height: rowHeight }}>
+                      {/* Grid base */}
                       <div
-                        className="sticky left-0 z-10 bg-white px-2 py-3 border-r font-semibold"
-                        style={{ height: rowHeight }}
+                        className="grid"
+                        style={{
+                          height: rowHeight,
+                          gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
+                        }}
                       >
-                        {s.code}
+                        {/* Materia */}
+                        <div className="sticky left-0 z-10 bg-white px-3 py-4 border-r border-gray-300 font-semibold">
+                          {s.code}
+                        </div>
+
+                        {/* 7 celdas */}
+                        {weekDays.map((d) => (
+                          <div
+                            key={d.iso}
+                            className={[
+                              "border-l border-gray-200 hover:bg-gray-50 cursor-pointer",
+                              d.iso === todayISO ? TODAY_CELL : "",
+                            ].join(" ")}
+                            onClick={() => openAddModal(s.id, d.iso)}
+                            title="Agregar actividad"
+                          />
+                        ))}
                       </div>
 
-                      {/* 7 celdas clickeables (fondo) */}
-                      {weekDays.map((d) => (
-                        <div
-                          key={d.iso}
-                          className={[
-                            "relative border-l hover:bg-gray-50 cursor-pointer",
-                            d.iso === todayISO ? TODAY_CELL : "",
-                          ].join(" ")}
-                          style={{ height: rowHeight }}
-                          onClick={() => openAddModal(s.id, d.iso)}
-                          title="Agregar actividad"
-                        />
-                      ))}
-
-                      {/* Overlay barras */}
+                      {/* Overlay barras ABSOLUTO */}
                       <div
-                        className="pointer-events-none"
+                        className="pointer-events-none absolute inset-0"
                         style={{
-                          gridColumn: "2 / 9",
-                          position: "relative",
-                          height: rowHeight,
+                          paddingLeft: subjectColWidth,
                         }}
                       >
                         {bars.map((b) => {
                           const startCol = b.startIdx + 1; // 1..7
                           const endCol = b.endIdx + 2; // exclusivo
-                          const top = 10 + b.lane * laneHeight;
+                          const top = 12 + b.lane * laneHeight;
 
                           return (
                             <div
@@ -495,7 +485,7 @@ export default function CronogramaPage() {
                                 top,
                                 display: "grid",
                                 gridTemplateColumns: `repeat(7, minmax(${dayMinWidth}px, 1fr))`,
-                                padding: "0 8px",
+                                padding: "0 10px",
                               }}
                             >
                               <button
@@ -506,15 +496,13 @@ export default function CronogramaPage() {
                                 }}
                                 className={[
                                   "pointer-events-auto",
-                                  "rounded-md px-2 py-1 text-left font-medium",
-                                  "text-[11px] leading-tight",
+                                  "rounded-lg px-3 py-2 text-left font-semibold",
+                                  "text-[12px] leading-tight",
                                   "whitespace-normal break-words",
                                   "shadow-sm",
                                   chipClass(b.type),
                                 ].join(" ")}
-                                style={{
-                                  gridColumn: `${startCol} / ${endCol}`,
-                                }}
+                                style={{ gridColumn: `${startCol} / ${endCol}` }}
                                 title="Editar / borrar"
                               >
                                 {b.title}
@@ -532,7 +520,7 @@ export default function CronogramaPage() {
           </div>
 
           {/* Leyenda */}
-          <div className="p-3 border-t text-xs text-gray-600 flex flex-wrap gap-3">
+          <div className="p-3 border-t border-gray-300 text-xs text-gray-600 flex flex-wrap gap-3">
             <span className="flex items-center gap-2">
               <span className="w-3 h-3 rounded bg-red-600 inline-block" />
               Evaluado/Entrega
