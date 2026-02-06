@@ -350,10 +350,10 @@ export default function CronogramaPage() {
   }
 
   // Ajustes visuales
-  const subjectColWidth = 90; // px
-  const dayMinWidth = 90; // px
+  const subjectColWidth = 50; // px
+  const dayMinWidth = 130; // px
   const laneHeight = 30; // px
-  const baseRowHeight = 110; // px
+  const baseRowHeight = 200; // px
 
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
@@ -411,9 +411,10 @@ export default function CronogramaPage() {
         >
           {/* scroll vertical dentro de la tabla */}
           <div
-            className="overflow-x-auto overflow-y-auto [-webkit-overflow-scrolling:touch]"
-            style={{ height: "100%" }}
-          >
+  className="overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]"
+  style={{ height: "100%" }}
+>
+
             <div style={{ minWidth: subjectColWidth + 7 * dayMinWidth }}>
               {/* Header grid */}
               <div
@@ -423,7 +424,7 @@ export default function CronogramaPage() {
                 }}
               >
                 <div className="sticky left-0 z-20 bg-gray-100 px-3 py-4 font-semibold border-r border-gray-300">
-                  Materias
+                  Mat
                 </div>
 
                 {weekDays.map((d) => (
