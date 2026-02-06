@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { seedSubjectsIfEmpty } from "@/lib/seedSubjects";
@@ -81,6 +81,23 @@ const TODAY_CELL = "bg-indigo-50/60 ring-1 ring-inset ring-indigo-200";
 
 export default function CronogramaPage() {
   const router = useRouter();
+
+  // Para calcular alto disponible y que se vean las 5 materias sin scroll en la página
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [gridHeight, setGridHeight] = useState<number>(520);
+
+  useEffect(() => {
+    const recalc = () => {
+      const headerH = headerRef.current?.getBoundingClientRect().height ?? 0;
+      const vh = window.innerHeight;
+      // 16px margen abajo por seguridad
+      setGridHeight(Math.max(360, vh - headerH - 16));
+    };
+
+    recalc();
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, []);
 
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
@@ -334,7 +351,7 @@ export default function CronogramaPage() {
 
   // Ajustes visuales
   const subjectColWidth = 120; // px
-  const dayMinWidth = 140; // px (podés bajar a 120 si querés más “compacto”)
+  const dayMinWidth = 140; // px
   const laneHeight = 30; // px
   const baseRowHeight = 110; // px
 
@@ -342,26 +359,16 @@ export default function CronogramaPage() {
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
       <div className="max-w-7xl mx-auto">
         {/* HEADER */}
-        <div className="bg-white rounded-2xl shadow p-3 sm:p-5">
+        <div ref={headerRef} className="bg-white rounded-2xl shadow px-3 py-2 sm:px-5 sm:py-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-semibold truncate">Cronograma</h1>
-              <p className="text-[11px] sm:text-sm text-gray-500 truncate">{weekLabel}</p>
-              {email && <p className="text-[11px] text-gray-400 truncate mt-0.5">{email}</p>}
+              <h4 className="text-base sm:text-xl font-semibold truncate">Cronograma</h4>
+              
             </div>
-
-            <button
-              onClick={handleLogout}
-              className="rounded-xl border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-gray-100"
-            >
-              Salir
-            </button>
-          </div>
-
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+<div className="mt flex gap-2 overflow-x-auto pb-1">
             <button
               onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}
-              className="shrink-0 rounded-xl border px-3 py-2 text-xs font-medium hover:bg-gray-100"
+              className="shrink-0 rounded-xl border px-3 py-1 text-xs font-medium hover:bg-gray-100"
             >
               ← Semana
             </button>
@@ -384,13 +391,29 @@ export default function CronogramaPage() {
               Cargar materias
             </button>
           </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-xl border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-gray-100"
+            >
+              Salir
+            </button>
+          </div>
+
+          
 
           
         </div>
 
-        {/* GRID */}
-        <div className="mt-3 bg-white rounded-2xl shadow overflow-hidden">
-          <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        {/* GRID (alto fijo a pantalla) */}
+        <div
+          className="mt-3 bg-white rounded-2xl shadow overflow-hidden"
+          style={{ height: gridHeight }}
+        >
+          {/* scroll vertical dentro de la tabla */}
+          <div
+            className="overflow-x-auto overflow-y-auto [-webkit-overflow-scrolling:touch]"
+            style={{ height: "100%" }}
+          >
             <div style={{ minWidth: subjectColWidth + 7 * dayMinWidth }}>
               {/* Header grid */}
               <div
@@ -432,7 +455,17 @@ export default function CronogramaPage() {
                 subjects.map((s) => {
                   const bars = barsBySubject.get(s.id) ?? [];
                   const maxLane = bars.reduce((acc, b) => Math.max(acc, b.lane), -1);
-                  const rowHeight = Math.max(baseRowHeight, (maxLane + 1) * laneHeight + 28);
+
+                  // Alto disponible para filas: restamos header de días + leyenda aprox
+                  const headerRowH = 92;
+                  const legendH = 90;
+                  const availableForRows = gridHeight - headerRowH - legendH;
+
+                  const fitRow = Math.floor(availableForRows / subjects.length);
+                  const naturalRow = Math.max(baseRowHeight, (maxLane + 1) * laneHeight + 28);
+
+                  // que quepan las materias en pantalla
+                  const rowHeight = Math.max(70, Math.min(naturalRow, fitRow));
 
                   return (
                     <div key={s.id} className="relative border-b border-gray-300" style={{ height: rowHeight }}>
@@ -444,11 +477,10 @@ export default function CronogramaPage() {
                           gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
                         }}
                       >
-                        {/* Materia */}
+                        {/* Materia (sticky) */}
                         <div className="sticky left-0 z-10 bg-white px-3 py-4 border-r border-gray-300 border-b border-gray-300 font-semibold h-full">
-  {s.code}
-</div>
-
+                          {s.code}
+                        </div>
 
                         {/* 7 celdas */}
                         {weekDays.map((d) => (
@@ -464,35 +496,29 @@ export default function CronogramaPage() {
                         ))}
                       </div>
 
-                      {/* Overlay barras ABSOLUTO */}
+                      {/* Overlay barras (ALINEADO, sin padding que desplace) */}
                       <div
-  className="pointer-events-none absolute inset-0"
-  style={{
-    left: subjectColWidth,
-    right: 0,
-  }}
->
-  {bars.map((b) => {
-    const startCol = b.startIdx + 1;
-    const endCol = b.endIdx + 2;
-    const top = 12 + b.lane * laneHeight;
+                        className="pointer-events-none absolute inset-0"
+                        style={{
+                          left: subjectColWidth,
+                          right: 0,
+                        }}
+                      >
+                        {bars.map((b) => {
+                          const startCol = b.startIdx + 1; // 1..7
+                          const endCol = b.endIdx + 2; // exclusivo
+                          const top = 12 + b.lane * laneHeight;
 
-    return (
-      <div
-        key={b.id}
-        className="absolute left-0 right-0"
-        style={{
-          top,
-          display: "grid",
-          gridTemplateColumns: `repeat(7, minmax(${dayMinWidth}px, 1fr))`,
-        }}
-      >
-
-
-
-
-
-
+                          return (
+                            <div
+                              key={b.id}
+                              className="absolute left-0 right-0"
+                              style={{
+                                top,
+                                display: "grid",
+                                gridTemplateColumns: `repeat(7, minmax(${dayMinWidth}px, 1fr))`,
+                              }}
+                            >
                               <button
                                 type="button"
                                 onClick={(evt) => {
@@ -501,6 +527,7 @@ export default function CronogramaPage() {
                                 }}
                                 className={[
                                   "pointer-events-auto",
+                                  "mx-1", // margen sin desalinear
                                   "rounded-lg px-3 py-2 text-left font-semibold",
                                   "text-[12px] leading-tight",
                                   "whitespace-normal break-words",
@@ -521,27 +548,27 @@ export default function CronogramaPage() {
                   );
                 })
               )}
-            </div>
-          </div>
 
-          {/* Leyenda */}
-          <div className="p-3 border-t border-gray-300 text-xs text-gray-600 flex flex-wrap gap-3">
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-red-600 inline-block" />
-              Evaluado/Entrega
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-yellow-300 inline-block" />
-              Reunión
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-green-600 inline-block" />
-              Teórica
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-indigo-200 inline-block" />
-              Hoy
-            </span>
+              {/* Leyenda (dentro del scroll, al final) */}
+              <div className="p-3 border-t border-gray-300 text-xs text-gray-600 flex flex-wrap gap-3 bg-white">
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded bg-red-600 inline-block" />
+                  Evaluado/Entrega
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded bg-yellow-300 inline-block" />
+                  Reunión
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded bg-green-600 inline-block" />
+                  Teórica
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded bg-indigo-200 inline-block" />
+                  Hoy
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
