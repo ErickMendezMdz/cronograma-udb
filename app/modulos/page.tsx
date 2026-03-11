@@ -103,22 +103,25 @@ export default function ModulosPage() {
             </div>
           </Link>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6 shadow-2xl shadow-black/10">
+          <Link
+            href="/dinero-tanque"
+            className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-emerald-400/60 hover:bg-slate-900"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-300">
-                  Próximamente
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
+                  Disponible
                 </p>
                 <h2 className="mt-3 text-2xl font-semibold">Dinero Tanque</h2>
                 <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                  El módulo ya aparece en la selección, pero todavía no tiene funcionalidades implementadas.
+                  Registrá compras, controlá gastos y mirá cuánto dinero tenés disponible para seguir construyendo.
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300">
-                Pendiente
+              <div className="rounded-2xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200">
+                Entrar
               </div>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </div>
