@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getSupabaseBrowserClient,
@@ -15,6 +15,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadSession() {
+      if (!supabase) return;
+
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        router.replace("/modulos");
+      }
+    }
+
+    loadSession();
+  }, [router, supabase]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -38,7 +51,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/cronograma");
+    router.push("/modulos");
     router.refresh();
   }
 
@@ -47,7 +60,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border border-slate-700/70 bg-slate-900/85 shadow-2xl shadow-black/30 backdrop-blur p-6 text-slate-100">
         <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
         <p className="text-sm text-slate-400 mt-1">
-          Entrá para ver tu cronograma semanal.
+          Entrá para seleccionar el módulo que querés usar.
         </p>
 
         {configError && (
