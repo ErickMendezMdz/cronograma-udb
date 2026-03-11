@@ -1,6 +1,12 @@
-import { supabase } from "./supabaseClient";
+import { getSupabaseBrowserClient, getSupabaseConfigError } from "./supabaseClient";
 
 export async function seedSubjectsIfEmpty() {
+  const supabase = getSupabaseBrowserClient();
+
+  if (!supabase) {
+    throw new Error(getSupabaseConfigError() ?? "Falta configurar Supabase.");
+  }
+
   const { data: sessionData } = await supabase.auth.getSession();
   const user = sessionData.session?.user;
   if (!user) throw new Error("No hay sesión.");

@@ -4,7 +4,10 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  getSupabaseBrowserClient,
+  getSupabaseConfigError,
+} from "@/lib/supabaseClient";
 import { seedSubjectsIfEmpty } from "@/lib/seedSubjects";
 import {
   addDays,
@@ -32,9 +35,9 @@ type UniEvent = {
 };
 
 function chipClass(t: UniEvent["type"]) {
-  if (t === "evaluado_entrega") return "bg-red-600 text-white";
-  if (t === "reunion") return "bg-yellow-300 text-black";
-  return "bg-green-600 text-white";
+  if (t === "evaluado_entrega") return "bg-rose-700 text-rose-50";
+  if (t === "reunion") return "bg-amber-400 text-slate-950";
+  return "bg-emerald-700 text-emerald-50";
 }
 
 function clamp(n: number, min: number, max: number) {
@@ -76,11 +79,13 @@ function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
   return out;
 }
 
-const TODAY_HEAD = "bg-indigo-50 ring-1 ring-indigo-200";
-const TODAY_CELL = "bg-indigo-50/60 ring-1 ring-inset ring-indigo-200";
+const TODAY_HEAD = "bg-blue-500/15 ring-1 ring-blue-400/40";
+const TODAY_CELL = "bg-blue-500/10 ring-1 ring-inset ring-blue-400/35";
 
 export default function CronogramaPage() {
   const router = useRouter();
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const configError = useMemo(() => getSupabaseConfigError(), []);
 
   // Para calcular alto disponible y que se vean las 5 materias sin scroll en la página
   const headerRef = useRef<HTMLDivElement | null>(null);
@@ -142,6 +147,11 @@ export default function CronogramaPage() {
 
   useEffect(() => {
     async function loadSession() {
+      if (!supabase) {
+        setChecking(false);
+        return;
+      }
+
       const { data } = await supabase.auth.getSession();
       const session = data.session;
 
@@ -154,14 +164,16 @@ export default function CronogramaPage() {
       setChecking(false);
     }
     loadSession();
-  }, [router]);
+  }, [router, supabase]);
 
   async function handleLogout() {
+    if (!supabase) return;
     await supabase.auth.signOut();
     router.replace("/login");
   }
 
   async function loadWeekData() {
+    if (!supabase) return;
     setLoadingData(true);
 
     const { data: subj, error: e1 } = await supabase
@@ -229,6 +241,7 @@ export default function CronogramaPage() {
   }
 
   async function saveEvent() {
+    if (!supabase) return alert(configError ?? "Falta configurar Supabase.");
     if (!title.trim()) return alert("Poné un título.");
 
     const end = endDate || startDate;
@@ -270,6 +283,7 @@ export default function CronogramaPage() {
   }
 
   async function updateEvent() {
+    if (!supabase) return alert(configError ?? "Falta configurar Supabase.");
     if (!editing) return;
 
     if (!editTitle.trim()) return alert("Poné un título.");
@@ -300,6 +314,7 @@ export default function CronogramaPage() {
   }
 
   async function deleteEvent() {
+    if (!supabase) return alert(configError ?? "Falta configurar Supabase.");
     if (!editing) return;
     const ok = confirm(`¿Eliminar "${editing.title}"?`);
     if (!ok) return;
@@ -349,6 +364,19 @@ export default function CronogramaPage() {
     return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
   }
 
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-transparent p-4">
+        <div className="w-full max-w-lg rounded-2xl border border-red-900 bg-slate-900/90 p-6 shadow-2xl shadow-black/30">
+          <h1 className="text-xl font-semibold">Configuración incompleta</h1>
+          <p className="mt-2 text-sm text-slate-300">
+            {configError ?? "Falta configurar las variables públicas de Supabase."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Ajustes visuales
   const subjectColWidth = 50; // px
   const dayMinWidth = 130; // px
@@ -356,10 +384,10 @@ export default function CronogramaPage() {
   const baseRowHeight = 200; // px
 
   return (
-    <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
+    <div className="min-h-screen bg-transparent p-2 sm:p-4 text-slate-100">
       <div className="max-w-7xl mx-auto">
         {/* HEADER */}
-        <div ref={headerRef} className="bg-white rounded-2xl shadow px-3 py-2 sm:px-5 sm:py-3">
+        <div ref={headerRef} className="rounded-2xl border border-slate-700/70 bg-slate-900/85 shadow-2xl shadow-black/20 px-3 py-2 sm:px-5 sm:py-3 backdrop-blur">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h4 className="text-base sm:text-xl font-semibold truncate">Cronograma</h4>
@@ -368,32 +396,32 @@ export default function CronogramaPage() {
 <div className="mt flex gap-2 overflow-x-auto pb-1">
             <button
               onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}
-              className="shrink-0 rounded-xl border px-3 py-1 text-xs font-medium hover:bg-gray-100"
+              className="shrink-0 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-800"
             >
               ← Semana
             </button>
             <button
               onClick={() => setWeekAnchor(new Date())}
-              className="shrink-0 rounded-xl border px-3 py-2 text-xs font-medium hover:bg-gray-100"
+              className="shrink-0 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
             >
               Hoy
             </button>
             <button
               onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}
-              className="shrink-0 rounded-xl border px-3 py-2 text-xs font-medium hover:bg-gray-100"
+              className="shrink-0 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
             >
               Semana →
             </button>
             <button
               onClick={seedSubjects}
-              className="shrink-0 rounded-xl bg-black text-white px-3 py-2 text-xs font-medium"
+              className="shrink-0 rounded-xl bg-blue-500 text-slate-950 px-3 py-2 text-xs font-semibold"
             >
               Cargar materias
             </button>
           </div>
             <button
               onClick={handleLogout}
-              className="rounded-xl border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-gray-100"
+              className="rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs sm:text-sm font-medium text-slate-200 hover:bg-slate-800"
             >
               Salir
             </button>
@@ -406,7 +434,7 @@ export default function CronogramaPage() {
 
         {/* GRID (alto fijo a pantalla) */}
         <div
-          className="mt-3 bg-white rounded-2xl shadow overflow-hidden"
+          className="mt-3 rounded-2xl border border-slate-700/70 bg-slate-900/85 shadow-2xl shadow-black/20 overflow-hidden"
           style={{ height: gridHeight }}
         >
           {/* scroll vertical dentro de la tabla */}
@@ -418,12 +446,12 @@ export default function CronogramaPage() {
             <div style={{ minWidth: subjectColWidth + 7 * dayMinWidth }}>
               {/* Header grid */}
               <div
-                className="grid bg-gray-100 border-b border-gray-300"
+                className="grid bg-slate-800 border-b border-slate-700"
                 style={{
                   gridTemplateColumns: `${subjectColWidth}px repeat(7, minmax(${dayMinWidth}px, 1fr))`,
                 }}
               >
-                <div className="sticky left-0 z-20 bg-gray-100 px-3 py-4 font-semibold border-r border-gray-300">
+                <div className="sticky left-0 z-20 bg-slate-800 px-3 py-4 font-semibold border-r border-slate-700">
                   Mat
                 </div>
 
@@ -431,15 +459,15 @@ export default function CronogramaPage() {
                   <div
                     key={d.iso}
                     className={[
-                      "px-2 py-3 text-center border-l border-gray-300",
+                      "px-2 py-3 text-center border-l border-slate-700",
                       d.iso === todayISO ? TODAY_HEAD : "",
                     ].join(" ")}
                   >
                     <div className="font-semibold text-xs sm:text-sm">{d.dowLabel}</div>
-                    <div className="text-[10px] text-gray-500 capitalize">{d.monthLabel}</div>
+                    <div className="text-[10px] text-slate-400 capitalize">{d.monthLabel}</div>
                     <div className="text-xs sm:text-sm">{d.dayNum}</div>
                     {d.iso === todayISO && (
-                      <div className="mt-1 text-[10px] font-semibold text-indigo-700">HOY</div>
+                      <div className="mt-1 text-[10px] font-semibold text-blue-300">HOY</div>
                     )}
                   </div>
                 ))}
@@ -447,9 +475,9 @@ export default function CronogramaPage() {
 
               {/* Body */}
               {loadingData ? (
-                <div className="p-6 text-center text-gray-500">Cargando...</div>
+                <div className="p-6 text-center text-slate-400">Cargando...</div>
               ) : subjects.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
+                <div className="p-6 text-center text-slate-400">
                   No hay materias. Dale a <b>“Cargar materias”</b>.
                 </div>
               ) : (
@@ -469,7 +497,7 @@ export default function CronogramaPage() {
                   const rowHeight = Math.max(70, Math.min(naturalRow, fitRow));
 
                   return (
-                    <div key={s.id} className="relative border-b border-gray-300" style={{ height: rowHeight }}>
+                    <div key={s.id} className="relative border-b border-slate-700" style={{ height: rowHeight }}>
                       {/* Grid base */}
                       <div
                         className="grid"
@@ -479,7 +507,7 @@ export default function CronogramaPage() {
                         }}
                       >
                         {/* Materia (sticky) */}
-                        <div className="sticky left-0 z-10 bg-white px-3 py-4 border-r border-gray-300 border-b border-gray-300 font-semibold h-full">
+                        <div className="sticky left-0 z-10 bg-slate-900 px-3 py-4 border-r border-slate-700 border-b border-slate-700 font-semibold h-full">
                           {s.code}
                         </div>
 
@@ -488,7 +516,7 @@ export default function CronogramaPage() {
                           <div
                             key={d.iso}
                             className={[
-                              "border-l border-gray-200 hover:bg-gray-50 cursor-pointer",
+                              "border-l border-slate-800 hover:bg-slate-800/60 cursor-pointer",
                               d.iso === todayISO ? TODAY_CELL : "",
                             ].join(" ")}
                             onClick={() => openAddModal(s.id, d.iso)}
@@ -532,7 +560,7 @@ export default function CronogramaPage() {
                                   "rounded-lg px-3 py-2 text-left font-semibold",
                                   "text-[12px] leading-tight",
                                   "whitespace-normal break-words",
-                                  "shadow-sm",
+                                  "shadow-lg shadow-black/20",
                                   chipClass(b.type),
                                 ].join(" ")}
                                 style={{ gridColumn: `${startCol} / ${endCol}` }}
@@ -551,21 +579,21 @@ export default function CronogramaPage() {
               )}
 
               {/* Leyenda (dentro del scroll, al final) */}
-              <div className="p-3 border-t border-gray-300 text-xs text-gray-600 flex flex-wrap gap-3 bg-white">
+              <div className="p-3 border-t border-slate-700 text-xs text-slate-400 flex flex-wrap gap-3 bg-slate-900">
                 <span className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-red-600 inline-block" />
+                  <span className="w-3 h-3 rounded bg-rose-700 inline-block" />
                   Evaluado/Entrega
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-yellow-300 inline-block" />
+                  <span className="w-3 h-3 rounded bg-amber-400 inline-block" />
                   Reunión
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-green-600 inline-block" />
+                  <span className="w-3 h-3 rounded bg-emerald-700 inline-block" />
                   Teórica
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-indigo-200 inline-block" />
+                  <span className="w-3 h-3 rounded bg-blue-400/60 inline-block" />
                   Hoy
                 </span>
               </div>
@@ -581,21 +609,21 @@ export default function CronogramaPage() {
           onClick={() => setModalOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow w-[calc(100vw-24px)] sm:w-full sm:max-w-md max-h-[85vh] overflow-y-auto p-5"
+            className="w-[calc(100vw-24px)] sm:w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl shadow-black/30 text-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Agregar actividad</h2>
-              <button onClick={() => setModalOpen(false)} className="rounded-lg px-3 py-1 hover:bg-gray-100">
+              <button onClick={() => setModalOpen(false)} className="rounded-lg px-3 py-1 text-slate-300 hover:bg-slate-800">
                 ✕
               </button>
             </div>
 
             <div className="mt-4 space-y-3">
               <div>
-                <label className="text-sm font-medium">Título</label>
+                <label className="text-sm font-medium text-slate-200">Título</label>
                 <input
-                  className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Ej: Parcial 1"
@@ -604,10 +632,10 @@ export default function CronogramaPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium">Desde</label>
+                  <label className="text-sm font-medium text-slate-200">Desde</label>
                   <input
                     type="date"
-                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                     value={startDate}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -617,10 +645,10 @@ export default function CronogramaPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Hasta</label>
+                  <label className="text-sm font-medium text-slate-200">Hasta</label>
                   <input
                     type="date"
-                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />
@@ -628,9 +656,9 @@ export default function CronogramaPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">Tipo</label>
+                <label className="text-sm font-medium text-slate-200">Tipo</label>
                 <select
-                  className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring bg-white"
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                   value={type}
                   onChange={(e) => setType(e.target.value as UniEvent["type"])}
                 >
@@ -641,9 +669,9 @@ export default function CronogramaPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">% (opcional)</label>
+                <label className="text-sm font-medium text-slate-200">% (opcional)</label>
                 <input
-                  className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="Ej: 20"
@@ -654,11 +682,11 @@ export default function CronogramaPage() {
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 rounded-xl border py-3 font-medium hover:bg-gray-100"
+                  className="flex-1 rounded-xl border border-slate-700 bg-slate-950/70 py-3 font-medium text-slate-200 hover:bg-slate-800"
                 >
                   Cancelar
                 </button>
-                <button onClick={saveEvent} className="flex-1 rounded-xl bg-black text-white py-3 font-medium">
+                <button onClick={saveEvent} className="flex-1 rounded-xl bg-blue-500 text-slate-950 py-3 font-semibold">
                   Guardar
                 </button>
               </div>
@@ -677,7 +705,7 @@ export default function CronogramaPage() {
           }}
         >
           <div
-            className="bg-white rounded-2xl shadow w-[calc(100vw-24px)] sm:w-full sm:max-w-md max-h-[85vh] overflow-y-auto p-5"
+            className="w-[calc(100vw-24px)] sm:w-full sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl shadow-black/30 text-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -687,7 +715,7 @@ export default function CronogramaPage() {
                   setEditOpen(false);
                   setEditing(null);
                 }}
-                className="rounded-lg px-3 py-1 hover:bg-gray-100"
+                className="rounded-lg px-3 py-1 text-slate-300 hover:bg-slate-800"
               >
                 ✕
               </button>
@@ -695,9 +723,9 @@ export default function CronogramaPage() {
 
             <div className="mt-4 space-y-3">
               <div>
-                <label className="text-sm font-medium">Título</label>
+                <label className="text-sm font-medium text-slate-200">Título</label>
                 <input
-                  className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                 />
@@ -705,10 +733,10 @@ export default function CronogramaPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium">Desde</label>
+                  <label className="text-sm font-medium text-slate-200">Desde</label>
                   <input
                     type="date"
-                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                     value={editStart}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -718,10 +746,10 @@ export default function CronogramaPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Hasta</label>
+                  <label className="text-sm font-medium text-slate-200">Hasta</label>
                   <input
                     type="date"
-                    className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                     value={editEnd}
                     onChange={(e) => setEditEnd(e.target.value)}
                   />
@@ -729,9 +757,9 @@ export default function CronogramaPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">Tipo</label>
+                <label className="text-sm font-medium text-slate-200">Tipo</label>
                 <select
-                  className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring bg-white"
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                   value={editType}
                   onChange={(e) => setEditType(e.target.value as UniEvent["type"])}
                 >
@@ -742,9 +770,9 @@ export default function CronogramaPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">% (opcional)</label>
+                <label className="text-sm font-medium text-slate-200">% (opcional)</label>
                 <input
-                  className="mt-1 w-full rounded-xl border p-3 outline-none focus:ring"
+                  className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3 text-slate-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
                   value={editWeight}
                   onChange={(e) => setEditWeight(e.target.value)}
                   placeholder="Ej: 20"
@@ -753,10 +781,16 @@ export default function CronogramaPage() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button onClick={deleteEvent} className="flex-1 rounded-xl border py-3 font-medium hover:bg-gray-100">
+                <button
+                  onClick={deleteEvent}
+                  className="flex-1 rounded-xl border border-slate-700 bg-slate-950/70 py-3 font-medium text-slate-200 hover:bg-slate-800"
+                >
                   Eliminar
                 </button>
-                <button onClick={updateEvent} className="flex-1 rounded-xl bg-black text-white py-3 font-medium">
+                <button
+                  onClick={updateEvent}
+                  className="flex-1 rounded-xl bg-blue-500 text-slate-950 py-3 font-semibold"
+                >
                   Guardar cambios
                 </button>
               </div>
