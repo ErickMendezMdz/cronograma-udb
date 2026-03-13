@@ -82,7 +82,7 @@ export default function ModulosPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Link
             href="/cronograma"
             className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-blue-400/60 hover:bg-slate-900"
@@ -118,6 +118,28 @@ export default function ModulosPage() {
                 </p>
               </div>
               <div className="rounded-2xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200">
+                Entrar
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/pretty-escritorio"
+            className="group rounded-3xl border border-[#6f5641] bg-[linear-gradient(145deg,rgba(31,25,22,0.94),rgba(14,14,15,0.94))] p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-[#d6b48a]/70"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#d8be9d]">
+                  Nuevo
+                </p>
+                <h2 className="mt-3 text-2xl font-semibold text-[#f3e8d8]">
+                  Pretty - Salon de belleza
+                </h2>
+                <p className="mt-3 max-w-md text-sm leading-6 text-[#c2b19f]">
+                  Escritorio principal inspirado en el diseno del salon, listo para seguir construyendo el resto del sistema.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-[#d6b48a]/15 px-3 py-2 text-sm font-semibold text-[#ecd3b2]">
                 Entrar
               </div>
             </div>
