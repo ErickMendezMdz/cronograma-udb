@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   getSupabaseBrowserClient,
@@ -394,6 +395,12 @@ export default function CronogramaPage() {
               
             </div>
 <div className="mt flex gap-2 overflow-x-auto pb-1">
+            <Link
+              href="/modulos"
+              className="shrink-0 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+            >
+              Modulos
+            </Link>
             <button
               onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}
               className="shrink-0 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-slate-800"
