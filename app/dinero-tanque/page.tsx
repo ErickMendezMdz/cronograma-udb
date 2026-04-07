@@ -394,36 +394,6 @@ export default function DineroTanquePage() {
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[0.92fr_1.58fr]">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-            <section className="rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/10">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Fondo disponible</h2>
-                  <p className="mt-4 text-2xl font-semibold text-emerald-100">{money.format(state.budget)}</p>
-                </div>
-                <button
-                  onClick={() => setBudgetModalOpen(true)}
-                  className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950"
-                >
-                  Editar
-                </button>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/10">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Agregar compra o gasto</h2>
-                  <p className="mt-4 text-2xl font-semibold">{state.expenses.length}</p>
-                </div>
-                <button
-                  onClick={() => setExpenseModalOpen(true)}
-                  className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950"
-                >
-                  Abrir
-                </button>
-              </div>
-            </section>
-
             <section className="rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/10 sm:col-span-2 xl:col-span-1">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -454,6 +424,36 @@ export default function DineroTanquePage() {
                   ))}
                 </div>
               )}
+            </section>
+
+            <section className="rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Fondo disponible</h2>
+                  <p className="mt-4 text-2xl font-semibold text-emerald-100">{money.format(state.budget)}</p>
+                </div>
+                <button
+                  onClick={() => setBudgetModalOpen(true)}
+                  className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950"
+                >
+                  Editar
+                </button>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Agregar compra o gasto</h2>
+                  <p className="mt-4 text-2xl font-semibold">{state.expenses.length}</p>
+                </div>
+                <button
+                  onClick={() => setExpenseModalOpen(true)}
+                  className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950"
+                >
+                  Abrir
+                </button>
+              </div>
             </section>
           </div>
 
