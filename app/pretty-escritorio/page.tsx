@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -734,6 +734,7 @@ function TransactionForm({
 
 export default function PrettyEscritorioPage() {
   const router = useRouter();
+  const actionAreaRef = useRef<HTMLDivElement>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const configError = useMemo(() => getSupabaseConfigError(), []);
 
@@ -879,6 +880,34 @@ export default function PrettyEscritorioPage() {
     router.replace("/login");
   }
 
+  function scrollToActionArea() {
+    window.setTimeout(() => {
+      actionAreaRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  }
+
+  function scrollToTop() {
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+  }
+
+  function switchSection(section: SectionId, shouldScroll = true) {
+    setActiveSection(section);
+
+    if (!shouldScroll) return;
+
+    if (section === "dashboard") {
+      scrollToTop();
+      return;
+    }
+
+    scrollToActionArea();
+  }
+
   function updateIncomeForm<K extends keyof TransactionFormState>(
     field: K,
     value: TransactionFormState[K]
@@ -911,11 +940,25 @@ export default function PrettyEscritorioPage() {
       paymentMethod,
       status: resolveStatusForPayment(paymentMethod, current.status),
     }));
-    setActiveSection("ingresos");
+    switchSection("ingresos");
   }
 
   function openExpenseForm() {
-    setActiveSection("gastos");
+    switchSection("gastos");
+  }
+
+  function handleMobileNavigation(section: SectionId) {
+    if (section === "ingresos") {
+      openIncomeForm("Efectivo");
+      return;
+    }
+
+    if (section === "gastos") {
+      openExpenseForm();
+      return;
+    }
+
+    switchSection(section);
   }
 
   async function addTransaction(kind: TransactionKind, event: FormEvent<HTMLFormElement>) {
@@ -1355,6 +1398,8 @@ export default function PrettyEscritorioPage() {
             />
           </section>
 
+          <div ref={actionAreaRef} className="scroll-mt-4" />
+
           {activeSection === "dashboard" ? (
             <>
               <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
@@ -1409,37 +1454,40 @@ export default function PrettyEscritorioPage() {
                     description="Elige la opcion que necesitas mover ahora."
                   />
                   <div className="mt-5 grid gap-3">
-                    {[
-                      {
-                        label: "Ingreso cobrado",
-                        detail: "Efectivo, tarjeta o transferencia",
-                        action: () => openIncomeForm("Efectivo"),
-                      },
-                      {
-                        label: "Venta al credito",
-                        detail: "Queda como por cobrar",
-                        action: () => openIncomeForm("Credito"),
-                      },
-                      {
-                        label: "Registrar gasto",
-                        detail: "Insumos, renta, nomina o equipo",
-                        action: openExpenseForm,
-                      },
-                      {
-                        label: "Revisar caja",
-                        detail: "Saldo por metodo de pago",
-                        action: () => setActiveSection("caja"),
-                      },
-                    ].map((actionItem) => (
-                      <button
-                        key={actionItem.label}
-                        onClick={actionItem.action}
-                        className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
-                      >
-                        <span className="block text-sm font-semibold text-[#f7f9fb]">{actionItem.label}</span>
-                        <span className="mt-1 block text-xs text-[#aeb5bf]">{actionItem.detail}</span>
-                      </button>
-                    ))}
+                    <button
+                      onClick={() => openIncomeForm("Efectivo")}
+                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
+                    >
+                      <span className="block text-sm font-semibold text-[#f7f9fb]">Ingreso cobrado</span>
+                      <span className="mt-1 block text-xs text-[#aeb5bf]">
+                        Efectivo, tarjeta o transferencia
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => openIncomeForm("Credito")}
+                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
+                    >
+                      <span className="block text-sm font-semibold text-[#f7f9fb]">Venta al credito</span>
+                      <span className="mt-1 block text-xs text-[#aeb5bf]">Queda como por cobrar</span>
+                    </button>
+                    <button
+                      onClick={openExpenseForm}
+                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
+                    >
+                      <span className="block text-sm font-semibold text-[#f7f9fb]">Registrar gasto</span>
+                      <span className="mt-1 block text-xs text-[#aeb5bf]">
+                        Insumos, renta, nomina o equipo
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => switchSection("caja")}
+                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
+                    >
+                      <span className="block text-sm font-semibold text-[#f7f9fb]">Revisar caja</span>
+                      <span className="mt-1 block text-xs text-[#aeb5bf]">
+                        Saldo por metodo de pago
+                      </span>
+                    </button>
                   </div>
                 </div>
               </section>
@@ -1482,7 +1530,7 @@ export default function PrettyEscritorioPage() {
                     description="Ultimos registros creados para el salon."
                   />
                   <button
-                    onClick={() => setActiveSection("reportes")}
+                    onClick={() => switchSection("reportes")}
                     className="rounded-lg border border-[#3a3f48] px-4 py-2 text-sm font-semibold text-[#d8dde3] transition hover:border-[#70d6ff]"
                   >
                     Ver reportes
@@ -1791,7 +1839,7 @@ export default function PrettyEscritorioPage() {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => handleMobileNavigation(item.id)}
                 className={[
                   "rounded-lg border px-2 py-2.5 text-xs font-semibold transition",
                   isActive
