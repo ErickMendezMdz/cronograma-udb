@@ -373,12 +373,12 @@ function MetricCard({
   accent: string;
 }) {
   return (
-    <article className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-lg shadow-black/15">
+    <article className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-lg shadow-black/15">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-[#a9b0ba]">{label}</p>
         <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: accent }} />
       </div>
-      <p className="mt-4 text-2xl font-semibold text-[#f7f9fb] sm:text-3xl">{value}</p>
+      <p className="mt-4 break-words text-2xl font-semibold text-[#f7f9fb] sm:text-3xl">{value}</p>
       <p className="mt-2 text-sm text-[#a9b0ba]">{detail}</p>
     </article>
   );
@@ -1191,17 +1191,17 @@ export default function PrettyEscritorioPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#101113] text-[#f7f9fb]">
-      <div className="mx-auto grid min-h-screen max-w-[1500px] lg:grid-cols-[292px_minmax(0,1fr)]">
-        <aside className="border-b border-[#30333a] bg-[#15171a] p-3 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-4">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#101113] text-[#f7f9fb]">
+      <div className="mx-auto grid min-h-screen w-full max-w-[1500px] min-w-0 lg:grid-cols-[292px_minmax(0,1fr)]">
+        <aside className="min-w-0 border-b border-[#30333a] bg-[#15171a] p-4 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div className="flex items-start justify-between gap-4 lg:block">
-            <div>
-              <p className="text-2xl font-semibold text-[#f7f9fb]">Pretty Salon</p>
+            <div className="min-w-0">
+              <p className="text-2xl font-semibold leading-tight text-[#f7f9fb]">Pretty Salon</p>
               <p className="mt-1 text-sm text-[#aeb5bf]">Control de ingresos y gastos</p>
             </div>
             <Link
               href="/modulos"
-              className="rounded-lg border border-[#3a3f48] px-3 py-2 text-sm font-semibold text-[#d8dde3] transition hover:border-[#00c2a8] hover:text-[#71f2d8]"
+              className="shrink-0 rounded-lg border border-[#3a3f48] px-3 py-2 text-sm font-semibold text-[#d8dde3] transition hover:border-[#00c2a8] hover:text-[#71f2d8]"
             >
               Modulos
             </Link>
@@ -1217,7 +1217,7 @@ export default function PrettyEscritorioPage() {
             }}
           />
 
-          <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 lg:mt-5 lg:grid lg:overflow-visible lg:pb-0">
+          <nav className="mt-5 hidden gap-2 lg:grid">
             {sectionItems.map((item) => {
               const isActive = activeSection === item.id;
 
@@ -1251,26 +1251,25 @@ export default function PrettyEscritorioPage() {
           </div>
         </aside>
 
-        <main className="pb-28 pl-4 pr-4 pt-4 sm:p-6 sm:pb-28 lg:p-8">
-          <header className="flex flex-col gap-4 border-b border-[#30333a] pb-5 xl:flex-row xl:items-end xl:justify-between">
-            <div>
+        <main className="min-w-0 pb-28 pl-4 pr-4 pt-4 sm:p-6 sm:pb-28 lg:p-8">
+          <header className="flex min-w-0 flex-col gap-4 border-b border-[#30333a] pb-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-[#00c2a8]">Pretty Salon de belleza</p>
-              <h1 className="mt-2 text-3xl font-semibold text-[#f7f9fb] sm:text-5xl">
+              <h1 className="mt-2 max-w-full text-3xl font-semibold leading-tight text-[#f7f9fb] sm:text-5xl">
                 Dashboard financiero
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#aeb5bf]">
-                Registra servicios, productos, insumos, pagos pendientes y caja diaria desde un
-                solo lugar.
+                Registra servicios, productos, insumos y pagos pendientes.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <label className="block">
+            <div className="grid min-w-0 gap-3 sm:flex sm:items-center">
+              <label className="block min-w-0">
                 <span className="text-sm text-[#aeb5bf]">Mes de trabajo</span>
                 <select
                   value={selectedMonth}
                   onChange={(event) => setSelectedMonth(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#181a1e] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:w-56"
+                  className="mt-2 w-full max-w-full rounded-lg border border-[#3a3f48] bg-[#181a1e] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:w-56 sm:py-2 sm:text-sm"
                 >
                   {monthOptions.map((month) => (
                     <option key={month} value={month}>
@@ -1279,24 +1278,26 @@ export default function PrettyEscritorioPage() {
                   ))}
                 </select>
               </label>
-              <button
-                onClick={() => openIncomeForm("Efectivo")}
-                className="rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] sm:mt-7"
-              >
-                Nuevo ingreso
-              </button>
-              <button
-                onClick={() => openIncomeForm("Credito")}
-                className="rounded-lg border border-[#f7d84a] px-4 py-3 text-sm font-semibold text-[#ffe06b] transition hover:bg-[#302a12] sm:mt-7"
-              >
-                Credito
-              </button>
-              <button
-                onClick={openExpenseForm}
-                className="rounded-lg border border-[#ff5f7e] px-4 py-3 text-sm font-semibold text-[#ff8aa1] transition hover:bg-[#321820] sm:mt-7"
-              >
-                Nuevo gasto
-              </button>
+              <div className="grid grid-cols-3 gap-2 sm:mt-7 sm:flex">
+                <button
+                  onClick={() => openIncomeForm("Efectivo")}
+                  className="min-w-0 rounded-lg bg-[#00c2a8] px-3 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] sm:px-4"
+                >
+                  Ingreso
+                </button>
+                <button
+                  onClick={() => openIncomeForm("Credito")}
+                  className="min-w-0 rounded-lg border border-[#f7d84a] px-3 py-3 text-sm font-semibold text-[#ffe06b] transition hover:bg-[#302a12] sm:px-4"
+                >
+                  Credito
+                </button>
+                <button
+                  onClick={openExpenseForm}
+                  className="min-w-0 rounded-lg border border-[#ff5f7e] px-3 py-3 text-sm font-semibold text-[#ff8aa1] transition hover:bg-[#321820] sm:px-4"
+                >
+                  Gasto
+                </button>
+              </div>
             </div>
           </header>
 
@@ -1327,7 +1328,7 @@ export default function PrettyEscritorioPage() {
             </div>
           ) : null}
 
-          <section className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <section className="mt-6 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="Ingresos cobrados"
               value={money.format(paidIncome)}
@@ -1356,22 +1357,22 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "dashboard" ? (
             <>
-              <section className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
-                <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
                     label="Vista principal"
                     title="Ingresos contra gastos"
                     description="Comparativo de los ultimos dias con movimientos pagados."
                   />
 
-                  <div className="mt-6 flex h-64 items-end gap-2 border-b border-[#30333a] px-1 pb-3">
+                  <div className="mt-6 flex h-44 min-w-0 items-end gap-1 border-b border-[#30333a] px-1 pb-3 sm:h-64 sm:gap-2">
                     {dailyTrend.map((item) => {
                       const incomeHeight = item.income > 0 ? Math.max((item.income / trendMax) * 100, 6) : 0;
                       const expenseHeight = item.expense > 0 ? Math.max((item.expense / trendMax) * 100, 6) : 0;
 
                       return (
                         <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                          <div className="flex h-48 w-full items-end justify-center gap-1">
+                          <div className="flex h-32 w-full items-end justify-center gap-1 sm:h-48">
                             <div
                               title={`Ingresos ${money.format(item.income)}`}
                               className="w-3 rounded-sm bg-[#00c2a8]"
@@ -1401,7 +1402,7 @@ export default function PrettyEscritorioPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
                     label="Accesos"
                     title="Siguiente accion"
@@ -1443,8 +1444,8 @@ export default function PrettyEscritorioPage() {
                 </div>
               </section>
 
-              <section className="mt-6 grid gap-4 xl:grid-cols-2">
-                <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-2">
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
                     label="Ingresos"
                     title="Fuentes del mes"
@@ -1458,7 +1459,7 @@ export default function PrettyEscritorioPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
                     label="Gastos"
                     title="Costos principales"
@@ -1473,7 +1474,7 @@ export default function PrettyEscritorioPage() {
                 </div>
               </section>
 
-              <section className="mt-6 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <section className="mt-6 min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <SectionTitle
                     label="Movimientos"
@@ -1500,7 +1501,7 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "ingresos" ? (
-            <section className="mt-6 grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
               <TransactionForm
                 kind="income"
                 title="Registrar ingreso"
@@ -1512,7 +1513,7 @@ export default function PrettyEscritorioPage() {
                 onChange={updateIncomeForm}
                 onSubmit={(event) => addTransaction("income", event)}
               />
-              <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                 <SectionTitle
                   label="Ingresos"
                   title="Historial de cobros"
@@ -1531,7 +1532,7 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "gastos" ? (
-            <section className="mt-6 grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
               <TransactionForm
                 kind="expense"
                 title="Registrar gasto"
@@ -1543,7 +1544,7 @@ export default function PrettyEscritorioPage() {
                 onChange={updateExpenseForm}
                 onSubmit={(event) => addTransaction("expense", event)}
               />
-              <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                 <SectionTitle
                   label="Gastos"
                   title="Historial de pagos"
@@ -1562,8 +1563,8 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "caja" ? (
-            <section className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                 <SectionTitle
                   label="Caja"
                   title="Saldo por metodo de pago"
@@ -1599,7 +1600,7 @@ export default function PrettyEscritorioPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                 <SectionTitle
                   label="Cierre"
                   title="Resumen de caja"
@@ -1631,7 +1632,7 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "servicios" ? (
             <section className="mt-6">
-              <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                 <SectionTitle
                   label="Servicios"
                   title="Catalogo base"
@@ -1693,7 +1694,7 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "clientes" ? (
-            <section className="mt-6 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+            <section className="mt-6 min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
               <SectionTitle
                 label="Clientes"
                 title="Historial financiero"
@@ -1733,7 +1734,7 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "reportes" ? (
-            <section className="mt-6 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+            <section className="mt-6 min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
               <SectionTitle
                 label="Reportes"
                 title="Resumen mensual"
