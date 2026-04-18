@@ -20,6 +20,28 @@ create index if not exists pretty_salon_transactions_owner_date_idx
 create index if not exists pretty_salon_transactions_owner_kind_idx
   on public.pretty_salon_transactions (owner_id, kind, status);
 
+create table if not exists public.pretty_salon_team_members (
+  email text primary key,
+  role text not null default 'member' check (role in ('owner', 'member')),
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.is_pretty_salon_team_member()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.pretty_salon_team_members
+    where lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  );
+$$;
+
+grant execute on function public.is_pretty_salon_team_member() to authenticated;
+
 update public.pretty_salon_transactions
 set status = 'pending'
 where payment_method = 'Credito'
@@ -42,6 +64,15 @@ end;
 $$;
 
 alter table public.pretty_salon_transactions enable row level security;
+alter table public.pretty_salon_team_members enable row level security;
+
+drop policy if exists "pretty_salon_team_members_select_own"
+  on public.pretty_salon_team_members;
+create policy "pretty_salon_team_members_select_own"
+  on public.pretty_salon_team_members
+  for select
+  to authenticated
+  using (lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')));
 
 drop policy if exists "pretty_salon_transactions_select_own"
   on public.pretty_salon_transactions;
@@ -49,7 +80,10 @@ create policy "pretty_salon_transactions_select_own"
   on public.pretty_salon_transactions
   for select
   to authenticated
-  using ((select auth.uid()) = owner_id);
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
 
 drop policy if exists "pretty_salon_transactions_insert_own"
   on public.pretty_salon_transactions;
@@ -65,8 +99,14 @@ create policy "pretty_salon_transactions_update_own"
   on public.pretty_salon_transactions
   for update
   to authenticated
-  using ((select auth.uid()) = owner_id)
-  with check ((select auth.uid()) = owner_id);
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  )
+  with check (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
 
 drop policy if exists "pretty_salon_transactions_delete_own"
   on public.pretty_salon_transactions;
@@ -74,7 +114,10 @@ create policy "pretty_salon_transactions_delete_own"
   on public.pretty_salon_transactions
   for delete
   to authenticated
-  using ((select auth.uid()) = owner_id);
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
 
 create or replace function public.set_updated_at()
 returns trigger

@@ -753,7 +753,7 @@ export default function PrettyEscritorioPage() {
   const [expenseForm, setExpenseForm] = useState<TransactionFormState>(defaultExpenseForm);
 
   const loadSalonData = useCallback(
-    async (currentUserId: string) => {
+    async () => {
       if (!supabase) return false;
 
       setLoadingData(true);
@@ -762,7 +762,6 @@ export default function PrettyEscritorioPage() {
       const { data, error } = await supabase
         .from("pretty_salon_transactions")
         .select(salonTransactionSelect)
-        .eq("owner_id", currentUserId)
         .order("transaction_date", { ascending: false })
         .order("created_at", { ascending: false });
 
@@ -792,8 +791,7 @@ export default function PrettyEscritorioPage() {
 
       const { count, error: countError } = await supabase
         .from("pretty_salon_transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_id", currentUserId);
+        .select("id", { count: "exact", head: true });
 
       if (countError) {
         setMigrationNotice(
@@ -860,7 +858,7 @@ export default function PrettyEscritorioPage() {
       setUserId(session.user.id);
       setEmail(session.user.email ?? null);
       await migrateLegacyTransactions(session.user.id);
-      await loadSalonData(session.user.id);
+      await loadSalonData();
 
       if (!cancelled) {
         setChecking(false);
@@ -1012,7 +1010,7 @@ export default function PrettyEscritorioPage() {
         ...current,
       ]);
     } else {
-      await loadSalonData(userId);
+      await loadSalonData();
     }
 
     if (kind === "income") {
@@ -1032,8 +1030,7 @@ export default function PrettyEscritorioPage() {
     const { error } = await supabase
       .from("pretty_salon_transactions")
       .delete()
-      .eq("id", id)
-      .eq("owner_id", userId);
+      .eq("id", id);
 
     setDeletingId(null);
 
@@ -1356,7 +1353,7 @@ export default function PrettyEscritorioPage() {
               <p className="mt-1">{loadError}</p>
               <button
                 onClick={() => {
-                  if (userId) void loadSalonData(userId);
+                  if (userId) void loadSalonData();
                 }}
                 className="mt-3 rounded-lg border border-[#ff8aa1] px-3 py-2 text-xs font-semibold text-[#ffd4dd] transition hover:bg-[#49212b]"
               >

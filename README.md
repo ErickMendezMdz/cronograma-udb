@@ -42,7 +42,16 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_SALON_ONLY_EMAILS=wife@example.com
 ```
 
-Pretty Salon stores movements in `public.pretty_salon_transactions` with RLS enabled, so each authenticated user can only read and edit their own income and expense records.
+Pretty Salon stores movements in `public.pretty_salon_transactions` with RLS enabled. Add every account that should share the salon data to `public.pretty_salon_team_members`:
+
+```sql
+insert into public.pretty_salon_team_members (email, role)
+values
+  ('your-email@example.com', 'owner'),
+  ('wife@example.com', 'member')
+on conflict (email) do update
+set role = excluded.role;
+```
 
 Use `NEXT_PUBLIC_SALON_ONLY_EMAILS` for accounts that should only see Pretty Salon. Add one or more emails separated by commas, for example `wife@example.com,admin-salon@example.com`. Those users will not see Cronograma or Dinero Tanque in the module selector, and direct visits to those routes are redirected to Pretty Salon.
 
