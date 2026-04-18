@@ -20,6 +20,27 @@ create index if not exists pretty_salon_transactions_owner_date_idx
 create index if not exists pretty_salon_transactions_owner_kind_idx
   on public.pretty_salon_transactions (owner_id, kind, status);
 
+update public.pretty_salon_transactions
+set status = 'pending'
+where payment_method = 'Credito'
+  and status <> 'pending';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'pretty_salon_credit_pending_chk'
+      and conrelid = 'public.pretty_salon_transactions'::regclass
+  ) then
+    alter table public.pretty_salon_transactions
+      add constraint pretty_salon_credit_pending_chk
+      check (payment_method <> 'Credito' or status = 'pending')
+      not valid;
+  end if;
+end;
+$$;
+
 alter table public.pretty_salon_transactions enable row level security;
 
 drop policy if exists "pretty_salon_transactions_select_own"

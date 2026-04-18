@@ -94,6 +94,13 @@ const sectionItems: Array<{ id: SectionId; label: string; detail: string }> = [
   { id: "reportes", label: "Reportes", detail: "Meses cerrados" },
 ];
 
+const mobileNavItems: Array<{ id: SectionId; label: string }> = [
+  { id: "dashboard", label: "Inicio" },
+  { id: "ingresos", label: "Ingreso" },
+  { id: "gastos", label: "Gasto" },
+  { id: "caja", label: "Caja" },
+];
+
 const incomeCategories = [
   "Servicios",
   "Productos",
@@ -214,6 +221,14 @@ function formatMonth(value: string) {
   }).format(new Date(`${value}-01T00:00:00`));
 }
 
+function isCreditPayment(paymentMethod: string) {
+  return paymentMethod === "Credito";
+}
+
+function resolveStatusForPayment(paymentMethod: string, status: SalonStatus): SalonStatus {
+  return isCreditPayment(paymentMethod) ? "pending" : status;
+}
+
 function storageKeyFor(userId: string) {
   return `pretty-salon-finance:${userId}`;
 }
@@ -291,7 +306,7 @@ function normalizeTransactionRow(row: SalonTransactionRow): SalonTransaction {
     category: row.category ?? "General",
     amount: Number(row.amount),
     paymentMethod: row.payment_method ?? "Efectivo",
-    status: row.status,
+    status: resolveStatusForPayment(row.payment_method ?? "Efectivo", row.status),
     contact: row.contact ?? "",
     notes: row.notes ?? "",
   };
@@ -309,7 +324,7 @@ function toTransactionInsert(
     category: item.category,
     amount: item.amount,
     payment_method: item.paymentMethod,
-    status: item.status,
+    status: resolveStatusForPayment(item.paymentMethod, item.status),
     contact: item.contact,
     notes: item.notes,
   };
@@ -338,8 +353,12 @@ function buildBreakdown(items: SalonTransaction[], colors: string[]): BreakdownI
     .sort((a, b) => b.value - a.value);
 }
 
-function getStatusLabel(status: SalonStatus) {
-  return status === "paid" ? "Pagado" : "Pendiente";
+function getStatusLabel(status: SalonStatus, kind: TransactionKind) {
+  if (status === "paid") {
+    return kind === "income" ? "Cobrado" : "Pagado";
+  }
+
+  return kind === "income" ? "Por cobrar" : "Por pagar";
 }
 
 function MetricCard({
@@ -359,7 +378,7 @@ function MetricCard({
         <p className="text-sm text-[#a9b0ba]">{label}</p>
         <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: accent }} />
       </div>
-      <p className="mt-4 text-3xl font-semibold text-[#f7f9fb]">{value}</p>
+      <p className="mt-4 text-2xl font-semibold text-[#f7f9fb] sm:text-3xl">{value}</p>
       <p className="mt-2 text-sm text-[#a9b0ba]">{detail}</p>
     </article>
   );
@@ -434,7 +453,65 @@ function TransactionTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-[#30333a]">
+    <>
+      <div className="space-y-3 md:hidden">
+        {transactions.map((item) => (
+          <article key={item.id} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-[#f7f9fb]">{item.concept}</p>
+                <p className="mt-1 text-xs text-[#aeb5bf]">
+                  {formatDate(item.date)} · {item.category}
+                </p>
+              </div>
+              <p
+                className={[
+                  "shrink-0 text-right text-lg font-semibold",
+                  item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
+                ].join(" ")}
+              >
+                {item.kind === "income" ? "+" : "-"}
+                {money.format(item.amount)}
+              </p>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-[#101113] px-3 py-2">
+                <p className="text-[#8f98a5]">Contacto</p>
+                <p className="mt-1 truncate text-[#d8dde3]">{item.contact || "Sin contacto"}</p>
+              </div>
+              <div className="rounded-md bg-[#101113] px-3 py-2">
+                <p className="text-[#8f98a5]">Metodo</p>
+                <p className="mt-1 truncate text-[#d8dde3]">{item.paymentMethod}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <span
+                className={[
+                  "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
+                  item.status === "paid"
+                    ? "bg-[#0f3b33] text-[#71f2d8]"
+                    : "bg-[#403611] text-[#ffe06b]",
+                ].join(" ")}
+              >
+                {getStatusLabel(item.status, item.kind)}
+              </span>
+              <button
+                onClick={() => onDelete(item.id)}
+                disabled={deletingId === item.id}
+                className="rounded-md border border-[#454b55] px-3 py-2 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingId === item.id ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+
+            {item.notes ? <p className="mt-3 text-xs leading-5 text-[#aeb5bf]">{item.notes}</p> : null}
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border border-[#30333a] md:block">
       <table className="min-w-[820px] w-full border-collapse text-left text-sm">
         <thead className="bg-[#111316] text-[#aeb5bf]">
           <tr>
@@ -468,7 +545,7 @@ function TransactionTable({
                       : "bg-[#403611] text-[#ffe06b]",
                   ].join(" ")}
                 >
-                  {getStatusLabel(item.status)}
+                  {getStatusLabel(item.status, item.kind)}
                 </span>
               </td>
               <td
@@ -493,11 +570,13 @@ function TransactionTable({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
 function TransactionForm({
+  kind,
   title,
   description,
   form,
@@ -507,6 +586,7 @@ function TransactionForm({
   onChange,
   onSubmit,
 }: {
+  kind: TransactionKind;
   title: string;
   description: string;
   form: TransactionFormState;
@@ -519,19 +599,29 @@ function TransactionForm({
   ) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const creditSelected = isCreditPayment(form.paymentMethod);
+  const statusText =
+    kind === "income"
+      ? creditSelected
+        ? "Credito se guarda como por cobrar."
+        : "Marca por cobrar solo si aun no recibiste el dinero."
+      : creditSelected
+        ? "Credito se guarda como por pagar."
+        : "Marca por pagar solo si aun no salio el dinero.";
+
   return (
     <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
       <h3 className="text-xl font-semibold text-[#f7f9fb]">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">{description}</p>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Fecha</span>
+        <label className="block sm:col-span-2">
+          <span className="text-sm text-[#c7ced6]">Concepto</span>
           <input
-            type="date"
-            value={form.date}
-            onChange={(event) => onChange("date", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            value={form.concept}
+            onChange={(event) => onChange("concept", event.target.value)}
+            placeholder={kind === "income" ? "Ej. Corte, color, manicure" : "Ej. Tintes, renta, limpieza"}
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           />
         </label>
 
@@ -539,22 +629,23 @@ function TransactionForm({
           <span className="text-sm text-[#c7ced6]">Monto</span>
           <input
             type="number"
+            inputMode="decimal"
             min="0"
             step="0.01"
             value={form.amount}
             onChange={(event) => onChange("amount", event.target.value)}
             placeholder="0.00"
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           />
         </label>
 
-        <label className="block sm:col-span-2">
-          <span className="text-sm text-[#c7ced6]">Concepto</span>
+        <label className="block">
+          <span className="text-sm text-[#c7ced6]">Fecha</span>
           <input
-            value={form.concept}
-            onChange={(event) => onChange("concept", event.target.value)}
-            placeholder="Ej. Corte, tinte, compra de insumos"
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            type="date"
+            value={form.date}
+            onChange={(event) => onChange("date", event.target.value)}
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           />
         </label>
 
@@ -563,7 +654,7 @@ function TransactionForm({
           <select
             value={form.category}
             onChange={(event) => onChange("category", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           >
             {categories.map((category) => (
               <option key={category} value={category}>
@@ -578,7 +669,7 @@ function TransactionForm({
           <select
             value={form.paymentMethod}
             onChange={(event) => onChange("paymentMethod", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           >
             {paymentMethods.map((method) => (
               <option key={method} value={method}>
@@ -589,24 +680,32 @@ function TransactionForm({
         </label>
 
         <label className="block">
-          <span className="text-sm text-[#c7ced6]">Estado</span>
+          <span className="text-sm text-[#c7ced6]">
+            {kind === "income" ? "Estado del cobro" : "Estado del pago"}
+          </span>
           <select
             value={form.status}
             onChange={(event) => onChange("status", event.target.value as SalonStatus)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            disabled={creditSelected}
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] disabled:cursor-not-allowed disabled:opacity-70 sm:py-2 sm:text-sm"
           >
-            <option value="paid">Pagado</option>
-            <option value="pending">Pendiente</option>
+            <option value="paid">{kind === "income" ? "Cobrado" : "Pagado"}</option>
+            <option value="pending">{kind === "income" ? "Por cobrar" : "Por pagar"}</option>
           </select>
+          <p className={["mt-2 text-xs leading-5", creditSelected ? "text-[#ffe06b]" : "text-[#8f98a5]"].join(" ")}>
+            {statusText}
+          </p>
         </label>
 
         <label className="block">
-          <span className="text-sm text-[#c7ced6]">Cliente o proveedor</span>
+          <span className="text-sm text-[#c7ced6]">
+            {kind === "income" ? "Cliente" : "Proveedor"}
+          </span>
           <input
             value={form.contact}
             onChange={(event) => onChange("contact", event.target.value)}
             placeholder="Nombre"
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           />
         </label>
 
@@ -617,7 +716,7 @@ function TransactionForm({
             onChange={(event) => onChange("notes", event.target.value)}
             rows={3}
             placeholder="Detalle opcional"
-            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-2 text-[#f7f9fb] outline-none transition focus:border-[#00c2a8]"
+            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           />
         </label>
       </div>
@@ -625,7 +724,7 @@ function TransactionForm({
       <button
         type="submit"
         disabled={submitting}
-        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-4 text-base font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60 sm:py-3 sm:text-sm"
       >
         {submitting ? "Guardando..." : submitLabel}
       </button>
@@ -784,14 +883,39 @@ export default function PrettyEscritorioPage() {
     field: K,
     value: TransactionFormState[K]
   ) {
-    setIncomeForm((current) => ({ ...current, [field]: value }));
+    setIncomeForm((current) => {
+      const next = { ...current, [field]: value };
+      return {
+        ...next,
+        status: resolveStatusForPayment(next.paymentMethod, next.status),
+      };
+    });
   }
 
   function updateExpenseForm<K extends keyof TransactionFormState>(
     field: K,
     value: TransactionFormState[K]
   ) {
-    setExpenseForm((current) => ({ ...current, [field]: value }));
+    setExpenseForm((current) => {
+      const next = { ...current, [field]: value };
+      return {
+        ...next,
+        status: resolveStatusForPayment(next.paymentMethod, next.status),
+      };
+    });
+  }
+
+  function openIncomeForm(paymentMethod = "Efectivo") {
+    setIncomeForm((current) => ({
+      ...current,
+      paymentMethod,
+      status: resolveStatusForPayment(paymentMethod, current.status),
+    }));
+    setActiveSection("ingresos");
+  }
+
+  function openExpenseForm() {
+    setActiveSection("gastos");
   }
 
   async function addTransaction(kind: TransactionKind, event: FormEvent<HTMLFormElement>) {
@@ -819,7 +943,7 @@ export default function PrettyEscritorioPage() {
       category: form.category,
       amount: Math.round(amount * 100) / 100,
       paymentMethod: form.paymentMethod,
-      status: form.status,
+      status: resolveStatusForPayment(form.paymentMethod, form.status),
       contact: form.contact.trim(),
       notes: form.notes.trim(),
     };
@@ -886,7 +1010,7 @@ export default function PrettyEscritorioPage() {
       amount: String(service.price),
       notes: `${service.duration} - costo estimado ${money.format(service.cost)}`,
     });
-    setActiveSection("ingresos");
+    openIncomeForm("Efectivo");
   }
 
   const sortedTransactions = useMemo(() => {
@@ -1069,7 +1193,7 @@ export default function PrettyEscritorioPage() {
   return (
     <div className="min-h-screen bg-[#101113] text-[#f7f9fb]">
       <div className="mx-auto grid min-h-screen max-w-[1500px] lg:grid-cols-[292px_minmax(0,1fr)]">
-        <aside className="border-b border-[#30333a] bg-[#15171a] p-4 lg:border-b-0 lg:border-r">
+        <aside className="border-b border-[#30333a] bg-[#15171a] p-3 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-4">
           <div className="flex items-start justify-between gap-4 lg:block">
             <div>
               <p className="text-2xl font-semibold text-[#f7f9fb]">Pretty Salon</p>
@@ -1086,14 +1210,14 @@ export default function PrettyEscritorioPage() {
           <div
             role="img"
             aria-label="Interior de salon de belleza"
-            className="mt-5 h-36 rounded-lg border border-[#30333a] bg-cover bg-center"
+            className="mt-5 hidden h-36 rounded-lg border border-[#30333a] bg-cover bg-center sm:block"
             style={{
               backgroundImage:
                 "linear-gradient(180deg, rgba(16,17,19,0.05), rgba(16,17,19,0.65)), url('https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=900&q=80')",
             }}
           />
 
-          <nav className="mt-5 grid gap-2">
+          <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 lg:mt-5 lg:grid lg:overflow-visible lg:pb-0">
             {sectionItems.map((item) => {
               const isActive = activeSection === item.id;
 
@@ -1102,7 +1226,7 @@ export default function PrettyEscritorioPage() {
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
                   className={[
-                    "rounded-lg border px-3 py-3 text-left transition",
+                    "min-w-[128px] rounded-lg border px-3 py-3 text-left transition lg:min-w-0",
                     isActive
                       ? "border-[#00c2a8] bg-[#0f312e] text-[#f7f9fb]"
                       : "border-[#30333a] bg-[#181a1e] text-[#d8dde3] hover:border-[#70d6ff]",
@@ -1115,7 +1239,7 @@ export default function PrettyEscritorioPage() {
             })}
           </nav>
 
-          <div className="mt-5 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+          <div className="mt-5 hidden rounded-lg border border-[#30333a] bg-[#181a1e] p-4 lg:block">
             <p className="text-sm font-semibold text-[#f7f9fb]">Sesion activa</p>
             <p className="mt-1 break-all text-sm text-[#aeb5bf]">{email ?? "Administracion"}</p>
             <button
@@ -1127,11 +1251,11 @@ export default function PrettyEscritorioPage() {
           </div>
         </aside>
 
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="pb-28 pl-4 pr-4 pt-4 sm:p-6 sm:pb-28 lg:p-8">
           <header className="flex flex-col gap-4 border-b border-[#30333a] pb-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <p className="text-sm font-semibold text-[#00c2a8]">Pretty Salon de belleza</p>
-              <h1 className="mt-2 text-4xl font-semibold text-[#f7f9fb] sm:text-5xl">
+              <h1 className="mt-2 text-3xl font-semibold text-[#f7f9fb] sm:text-5xl">
                 Dashboard financiero
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#aeb5bf]">
@@ -1156,13 +1280,19 @@ export default function PrettyEscritorioPage() {
                 </select>
               </label>
               <button
-                onClick={() => setActiveSection("ingresos")}
+                onClick={() => openIncomeForm("Efectivo")}
                 className="rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] sm:mt-7"
               >
                 Nuevo ingreso
               </button>
               <button
-                onClick={() => setActiveSection("gastos")}
+                onClick={() => openIncomeForm("Credito")}
+                className="rounded-lg border border-[#f7d84a] px-4 py-3 text-sm font-semibold text-[#ffe06b] transition hover:bg-[#302a12] sm:mt-7"
+              >
+                Credito
+              </button>
+              <button
+                onClick={openExpenseForm}
                 className="rounded-lg border border-[#ff5f7e] px-4 py-3 text-sm font-semibold text-[#ff8aa1] transition hover:bg-[#321820] sm:mt-7"
               >
                 Nuevo gasto
@@ -1197,7 +1327,7 @@ export default function PrettyEscritorioPage() {
             </div>
           ) : null}
 
-          <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
             <MetricCard
               label="Ingresos cobrados"
               value={money.format(paidIncome)}
@@ -1279,18 +1409,34 @@ export default function PrettyEscritorioPage() {
                   />
                   <div className="mt-5 grid gap-3">
                     {[
-                      ["Registrar ingreso", "Servicios, productos o paquetes", "ingresos"],
-                      ["Registrar gasto", "Insumos, renta, nomina o equipo", "gastos"],
-                      ["Revisar caja", "Saldo por metodo de pago", "caja"],
-                      ["Clientes pendientes", "Cuentas por cobrar", "clientes"],
-                    ].map(([label, detail, section]) => (
+                      {
+                        label: "Ingreso cobrado",
+                        detail: "Efectivo, tarjeta o transferencia",
+                        action: () => openIncomeForm("Efectivo"),
+                      },
+                      {
+                        label: "Venta al credito",
+                        detail: "Queda como por cobrar",
+                        action: () => openIncomeForm("Credito"),
+                      },
+                      {
+                        label: "Registrar gasto",
+                        detail: "Insumos, renta, nomina o equipo",
+                        action: openExpenseForm,
+                      },
+                      {
+                        label: "Revisar caja",
+                        detail: "Saldo por metodo de pago",
+                        action: () => setActiveSection("caja"),
+                      },
+                    ].map((actionItem) => (
                       <button
-                        key={label}
-                        onClick={() => setActiveSection(section as SectionId)}
+                        key={actionItem.label}
+                        onClick={actionItem.action}
                         className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
                       >
-                        <span className="block text-sm font-semibold text-[#f7f9fb]">{label}</span>
-                        <span className="mt-1 block text-xs text-[#aeb5bf]">{detail}</span>
+                        <span className="block text-sm font-semibold text-[#f7f9fb]">{actionItem.label}</span>
+                        <span className="mt-1 block text-xs text-[#aeb5bf]">{actionItem.detail}</span>
                       </button>
                     ))}
                   </div>
@@ -1356,6 +1502,7 @@ export default function PrettyEscritorioPage() {
           {activeSection === "ingresos" ? (
             <section className="mt-6 grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
               <TransactionForm
+                kind="income"
                 title="Registrar ingreso"
                 description="Guarda cobros de servicios, ventas de producto, membresias, paquetes o propinas."
                 form={incomeForm}
@@ -1386,6 +1533,7 @@ export default function PrettyEscritorioPage() {
           {activeSection === "gastos" ? (
             <section className="mt-6 grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
               <TransactionForm
+                kind="expense"
                 title="Registrar gasto"
                 description="Controla insumos, nomina, renta, servicios basicos, marketing, limpieza y equipo."
                 form={expenseForm}
@@ -1633,6 +1781,29 @@ export default function PrettyEscritorioPage() {
           ) : null}
         </main>
       </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#30333a] bg-[#15171a]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
+          {mobileNavItems.map((item) => {
+            const isActive = activeSection === item.id;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveSection(item.id)}
+                className={[
+                  "rounded-lg border px-2 py-2.5 text-xs font-semibold transition",
+                  isActive
+                    ? "border-[#00c2a8] bg-[#0f312e] text-[#71f2d8]"
+                    : "border-[#30333a] bg-[#181a1e] text-[#c7ced6]",
+                ].join(" ")}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
