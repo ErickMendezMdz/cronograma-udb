@@ -938,7 +938,7 @@ export default function PrettyEscritorioPage() {
     setIncomeForm((current) => ({
       ...current,
       paymentMethod,
-      status: resolveStatusForPayment(paymentMethod, current.status),
+      status: resolveStatusForPayment(paymentMethod, "paid"),
     }));
     switchSection("ingresos");
   }

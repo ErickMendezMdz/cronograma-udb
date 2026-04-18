@@ -7,6 +7,7 @@ import {
   getSupabaseBrowserClient,
   getSupabaseConfigError,
 } from "@/lib/supabaseClient";
+import { isSalonOnlyEmail } from "@/lib/moduleAccess";
 
 export default function ModulosPage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function ModulosPage() {
   const configError = useMemo(() => getSupabaseConfigError(), []);
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
+  const [salonOnly, setSalonOnly] = useState(false);
 
   useEffect(() => {
     async function loadSession() {
@@ -30,7 +32,9 @@ export default function ModulosPage() {
         return;
       }
 
-      setEmail(session.user.email ?? null);
+      const currentEmail = session.user.email ?? null;
+      setEmail(currentEmail);
+      setSalonOnly(isSalonOnlyEmail(currentEmail));
       setChecking(false);
     }
 
@@ -67,9 +71,15 @@ export default function ModulosPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Panel</p>
-              <h1 className="mt-2 text-2xl font-semibold">Seleccioná un módulo</h1>
+              <h1 className="mt-2 text-2xl font-semibold">
+                {salonOnly ? "Pretty Salon" : "Seleccioná un módulo"}
+              </h1>
               <p className="mt-2 text-sm text-slate-400">
-                {email ? `Sesión activa: ${email}` : "Elegí a dónde querés entrar."}
+                {email
+                  ? salonOnly
+                    ? `Sesión activa: ${email}. Acceso asignado al salon.`
+                    : `Sesión activa: ${email}`
+                  : "Elegí a dónde querés entrar."}
               </p>
             </div>
 
@@ -83,45 +93,49 @@ export default function ModulosPage() {
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Link
-            href="/cronograma"
-            className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-blue-400/60 hover:bg-slate-900"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">
-                  Disponible
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold">Cronograma</h2>
-                <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                  Gestioná materias y actividades semanales desde el calendario que ya tenés construido.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-blue-500/15 px-3 py-2 text-sm font-semibold text-blue-200">
-                Entrar
-              </div>
-            </div>
-          </Link>
+          {!salonOnly ? (
+            <>
+              <Link
+                href="/cronograma"
+                className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-blue-400/60 hover:bg-slate-900"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">
+                      Disponible
+                    </p>
+                    <h2 className="mt-3 text-2xl font-semibold">Cronograma</h2>
+                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
+                      Gestioná materias y actividades semanales desde el calendario que ya tenés construido.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-blue-500/15 px-3 py-2 text-sm font-semibold text-blue-200">
+                    Entrar
+                  </div>
+                </div>
+              </Link>
 
-          <Link
-            href="/dinero-tanque"
-            className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-emerald-400/60 hover:bg-slate-900"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                  Disponible
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold">Dinero Tanque</h2>
-                <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                  Registrá compras, controlá gastos y mirá cuánto dinero tenés disponible para seguir construyendo.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200">
-                Entrar
-              </div>
-            </div>
-          </Link>
+              <Link
+                href="/dinero-tanque"
+                className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-emerald-400/60 hover:bg-slate-900"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
+                      Disponible
+                    </p>
+                    <h2 className="mt-3 text-2xl font-semibold">Dinero Tanque</h2>
+                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
+                      Registrá compras, controlá gastos y mirá cuánto dinero tenés disponible para seguir construyendo.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200">
+                    Entrar
+                  </div>
+                </div>
+              </Link>
+            </>
+          ) : null}
 
           <Link
             href="/pretty-escritorio"

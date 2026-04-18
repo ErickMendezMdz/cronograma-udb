@@ -13,6 +13,7 @@ import {
   getSupabaseBrowserClient,
   getSupabaseConfigError,
 } from "@/lib/supabaseClient";
+import { isSalonOnlyEmail } from "@/lib/moduleAccess";
 
 const money = new Intl.NumberFormat("es-SV", {
   style: "currency",
@@ -189,6 +190,11 @@ export default function DineroTanquePage() {
 
       if (!session) {
         router.replace("/login");
+        return;
+      }
+
+      if (isSalonOnlyEmail(session.user.email)) {
+        router.replace("/pretty-escritorio");
         return;
       }
 

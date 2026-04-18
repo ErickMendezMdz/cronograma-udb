@@ -9,11 +9,11 @@ import {
   getSupabaseBrowserClient,
   getSupabaseConfigError,
 } from "@/lib/supabaseClient";
+import { isSalonOnlyEmail } from "@/lib/moduleAccess";
 import { seedSubjectsIfEmpty } from "@/lib/seedSubjects";
 import {
   addDays,
   DOW_ES,
-  formatHeaderRange,
   formatISODate,
   startOfWeekMonday,
 } from "@/lib/week";
@@ -33,6 +33,10 @@ type UniEvent = {
   date: string; // start YYYY-MM-DD
   end_date: string; // end YYYY-MM-DD
   weight_percent: number | null;
+};
+
+type UniEventRow = UniEvent & {
+  end_date: string | null;
 };
 
 function chipClass(t: UniEvent["type"]) {
@@ -71,7 +75,7 @@ function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
     while (true) {
       if (laneEnds[lane] == null || laneEnds[lane] < b.startIdx) {
         laneEnds[lane] = b.endIdx;
-        out.push({ ...(b as any), lane });
+        out.push({ ...b, lane });
         break;
       }
       lane++;
@@ -106,11 +110,8 @@ export default function CronogramaPage() {
   }, []);
 
   const [checking, setChecking] = useState(true);
-  const [email, setEmail] = useState<string | null>(null);
-
   const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
   const monday = useMemo(() => startOfWeekMonday(weekAnchor), [weekAnchor]);
-  const weekLabel = useMemo(() => formatHeaderRange(monday), [monday]);
   const todayISO = useMemo(() => formatISODate(new Date()), []);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -161,7 +162,11 @@ export default function CronogramaPage() {
         return;
       }
 
-      setEmail(session.user.email ?? null);
+      if (isSalonOnlyEmail(session.user.email)) {
+        router.replace("/pretty-escritorio");
+        return;
+      }
+
       setChecking(false);
     }
     loadSession();
@@ -205,7 +210,7 @@ export default function CronogramaPage() {
       return;
     }
 
-    const normalized = (ev ?? []).map((x: any) => ({
+    const normalized = ((ev as UniEventRow[] | null) ?? []).map((x) => ({
       ...x,
       end_date: x.end_date ?? x.date,
     }));
@@ -333,8 +338,8 @@ export default function CronogramaPage() {
       const res = await seedSubjectsIfEmpty();
       if (res.seeded) alert("Materias cargadas ✅");
       await loadWeekData();
-    } catch (e: any) {
-      alert(e.message ?? "Error sembrando materias");
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Error sembrando materias");
     }
   }
 
@@ -342,7 +347,7 @@ export default function CronogramaPage() {
     const map = new Map<string, Bar[]>();
 
     for (const s of subjects) {
-      const list = events
+      const list: Omit<Bar, "lane">[] = events
         .filter((e) => e.subject_id === s.id)
         .map((e) => {
           const startIdx = clamp(dayIndexFromMonday(e.date, monday), 0, 6);
@@ -354,7 +359,7 @@ export default function CronogramaPage() {
           };
         });
 
-      const withLanes = assignLanes(list as any);
+      const withLanes = assignLanes(list);
       map.set(s.id, withLanes);
     }
 
