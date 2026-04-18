@@ -1661,8 +1661,8 @@ export default function PrettyEscritorioPage() {
                     <span className="font-semibold text-[#ffe06b]">{money.format(pendingIncome)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
-                    <span className="text-[#aeb5bf]">Por pagar</span>
-                    <span className="font-semibold text-[#ff8aa1]">{money.format(pendingExpenses)}</span>
+                    <span className="text-[#aeb5bf]">Pagado</span>
+                    <span className="font-semibold text-[#ff8aa1]">{money.format(paidExpenses)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-[#aeb5bf]">Saldo proyectado</span>
