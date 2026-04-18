@@ -122,6 +122,7 @@ const expenseCategories = [
 ] as const;
 
 const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia", "Credito"] as const;
+const collectionPaymentMethods = paymentMethods.filter((method) => method !== "Credito");
 
 const salonTransactionSelect =
   "id, owner_id, kind, transaction_date, concept, category, amount, payment_method, status, contact, notes, created_at";
@@ -437,12 +438,16 @@ function TransactionTable({
   transactions,
   emptyMessage,
   onDelete,
+  onCollect,
   deletingId,
+  collectingId,
 }: {
   transactions: SalonTransaction[];
   emptyMessage: string;
   onDelete: (id: string) => void | Promise<void>;
+  onCollect: (transaction: SalonTransaction) => void;
   deletingId?: string | null;
+  collectingId?: string | null;
 }) {
   if (transactions.length === 0) {
     return (
@@ -455,88 +460,43 @@ function TransactionTable({
   return (
     <>
       <div className="space-y-3 md:hidden">
-        {transactions.map((item) => (
-          <article key={item.id} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-[#f7f9fb]">{item.concept}</p>
-                <p className="mt-1 text-xs text-[#aeb5bf]">
-                  {formatDate(item.date)} · {item.category}
+        {transactions.map((item) => {
+          const canCollect = item.kind === "income" && item.status === "pending";
+          const isCollecting = collectingId === item.id;
+          const isDeleting = deletingId === item.id;
+
+          return (
+            <article key={item.id} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-[#f7f9fb]">{item.concept}</p>
+                  <p className="mt-1 text-xs text-[#aeb5bf]">
+                    {formatDate(item.date)} · {item.category}
+                  </p>
+                </div>
+                <p
+                  className={[
+                    "shrink-0 text-right text-lg font-semibold",
+                    item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
+                  ].join(" ")}
+                >
+                  {item.kind === "income" ? "+" : "-"}
+                  {money.format(item.amount)}
                 </p>
               </div>
-              <p
-                className={[
-                  "shrink-0 text-right text-lg font-semibold",
-                  item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
-                ].join(" ")}
-              >
-                {item.kind === "income" ? "+" : "-"}
-                {money.format(item.amount)}
-              </p>
-            </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-[#101113] px-3 py-2">
-                <p className="text-[#8f98a5]">Contacto</p>
-                <p className="mt-1 truncate text-[#d8dde3]">{item.contact || "Sin contacto"}</p>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-md bg-[#101113] px-3 py-2">
+                  <p className="text-[#8f98a5]">Contacto</p>
+                  <p className="mt-1 truncate text-[#d8dde3]">{item.contact || "Sin contacto"}</p>
+                </div>
+                <div className="rounded-md bg-[#101113] px-3 py-2">
+                  <p className="text-[#8f98a5]">Metodo</p>
+                  <p className="mt-1 truncate text-[#d8dde3]">{item.paymentMethod}</p>
+                </div>
               </div>
-              <div className="rounded-md bg-[#101113] px-3 py-2">
-                <p className="text-[#8f98a5]">Metodo</p>
-                <p className="mt-1 truncate text-[#d8dde3]">{item.paymentMethod}</p>
-              </div>
-            </div>
 
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span
-                className={[
-                  "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
-                  item.status === "paid"
-                    ? "bg-[#0f3b33] text-[#71f2d8]"
-                    : "bg-[#403611] text-[#ffe06b]",
-                ].join(" ")}
-              >
-                {getStatusLabel(item.status, item.kind)}
-              </span>
-              <button
-                onClick={() => onDelete(item.id)}
-                disabled={deletingId === item.id}
-                className="rounded-md border border-[#454b55] px-3 py-2 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {deletingId === item.id ? "Eliminando..." : "Eliminar"}
-              </button>
-            </div>
-
-            {item.notes ? <p className="mt-3 text-xs leading-5 text-[#aeb5bf]">{item.notes}</p> : null}
-          </article>
-        ))}
-      </div>
-
-      <div className="hidden overflow-x-auto rounded-lg border border-[#30333a] md:block">
-      <table className="min-w-[820px] w-full border-collapse text-left text-sm">
-        <thead className="bg-[#111316] text-[#aeb5bf]">
-          <tr>
-            <th className="px-4 py-3 font-medium">Fecha</th>
-            <th className="px-4 py-3 font-medium">Concepto</th>
-            <th className="px-4 py-3 font-medium">Categoria</th>
-            <th className="px-4 py-3 font-medium">Contacto</th>
-            <th className="px-4 py-3 font-medium">Metodo</th>
-            <th className="px-4 py-3 font-medium">Estado</th>
-            <th className="px-4 py-3 text-right font-medium">Monto</th>
-            <th className="px-4 py-3 text-right font-medium">Accion</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[#30333a] bg-[#181a1e]">
-          {transactions.map((item) => (
-            <tr key={item.id} className="align-top">
-              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
-              <td className="px-4 py-4">
-                <p className="font-medium text-[#f7f9fb]">{item.concept}</p>
-                {item.notes ? <p className="mt-1 text-xs text-[#aeb5bf]">{item.notes}</p> : null}
-              </td>
-              <td className="px-4 py-4 text-[#d8dde3]">{item.category}</td>
-              <td className="px-4 py-4 text-[#d8dde3]">{item.contact || "Sin contacto"}</td>
-              <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
-              <td className="px-4 py-4">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <span
                   className={[
                     "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
@@ -547,29 +507,116 @@ function TransactionTable({
                 >
                   {getStatusLabel(item.status, item.kind)}
                 </span>
-              </td>
-              <td
-                className={[
-                  "px-4 py-4 text-right font-semibold",
-                  item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
-                ].join(" ")}
-              >
-                {item.kind === "income" ? "+" : "-"}
-                {money.format(item.amount)}
-              </td>
-              <td className="px-4 py-4 text-right">
-                <button
-                  onClick={() => onDelete(item.id)}
-                  disabled={deletingId === item.id}
-                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1]"
-                >
-                  {deletingId === item.id ? "Eliminando..." : "Eliminar"}
-                </button>
-              </td>
+                <div className="ml-auto flex flex-wrap justify-end gap-2">
+                  {canCollect ? (
+                    <button
+                      onClick={() => onCollect(item)}
+                      disabled={isCollecting || isDeleting}
+                      className="rounded-md border border-[#00c2a8] px-3 py-2 text-xs font-semibold text-[#71f2d8] transition hover:bg-[#0f312e] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCollecting ? "Cobrando..." : "Cobrar"}
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() => onDelete(item.id)}
+                    disabled={isDeleting || isCollecting}
+                    className="rounded-md border border-[#454b55] px-3 py-2 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isDeleting ? "Eliminando..." : "Eliminar"}
+                  </button>
+                </div>
+              </div>
+
+              {item.notes ? (
+                <p className="mt-3 whitespace-pre-line text-xs leading-5 text-[#aeb5bf]">
+                  {item.notes}
+                </p>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border border-[#30333a] md:block">
+        <table className="min-w-[900px] w-full border-collapse text-left text-sm">
+          <thead className="bg-[#111316] text-[#aeb5bf]">
+            <tr>
+              <th className="px-4 py-3 font-medium">Fecha</th>
+              <th className="px-4 py-3 font-medium">Concepto</th>
+              <th className="px-4 py-3 font-medium">Categoria</th>
+              <th className="px-4 py-3 font-medium">Contacto</th>
+              <th className="px-4 py-3 font-medium">Metodo</th>
+              <th className="px-4 py-3 font-medium">Estado</th>
+              <th className="px-4 py-3 text-right font-medium">Monto</th>
+              <th className="px-4 py-3 text-right font-medium">Accion</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-[#30333a] bg-[#181a1e]">
+            {transactions.map((item) => {
+              const canCollect = item.kind === "income" && item.status === "pending";
+              const isCollecting = collectingId === item.id;
+              const isDeleting = deletingId === item.id;
+
+              return (
+                <tr key={item.id} className="align-top">
+                  <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
+                  <td className="px-4 py-4">
+                    <p className="font-medium text-[#f7f9fb]">{item.concept}</p>
+                    {item.notes ? (
+                      <p className="mt-1 whitespace-pre-line text-xs text-[#aeb5bf]">
+                        {item.notes}
+                      </p>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-4 text-[#d8dde3]">{item.category}</td>
+                  <td className="px-4 py-4 text-[#d8dde3]">{item.contact || "Sin contacto"}</td>
+                  <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
+                  <td className="px-4 py-4">
+                    <span
+                      className={[
+                        "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
+                        item.status === "paid"
+                          ? "bg-[#0f3b33] text-[#71f2d8]"
+                          : "bg-[#403611] text-[#ffe06b]",
+                      ].join(" ")}
+                    >
+                      {getStatusLabel(item.status, item.kind)}
+                    </span>
+                  </td>
+                  <td
+                    className={[
+                      "px-4 py-4 text-right font-semibold",
+                      item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
+                    ].join(" ")}
+                  >
+                    {item.kind === "income" ? "+" : "-"}
+                    {money.format(item.amount)}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      {canCollect ? (
+                        <button
+                          onClick={() => onCollect(item)}
+                          disabled={isCollecting || isDeleting}
+                          className="rounded-md border border-[#00c2a8] px-3 py-1.5 text-xs font-semibold text-[#71f2d8] transition hover:bg-[#0f312e] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isCollecting ? "Cobrando..." : "Cobrar"}
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => onDelete(item.id)}
+                        disabled={isDeleting || isCollecting}
+                        className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isDeleting ? "Eliminando..." : "Eliminar"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </>
   );
@@ -744,6 +791,7 @@ export default function PrettyEscritorioPage() {
   const [migrationNotice, setMigrationNotice] = useState<string | null>(null);
   const [savingKind, setSavingKind] = useState<TransactionKind | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [collectingId, setCollectingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
@@ -751,6 +799,8 @@ export default function PrettyEscritorioPage() {
   const [transactions, setTransactions] = useState<SalonTransaction[]>([]);
   const [incomeForm, setIncomeForm] = useState<TransactionFormState>(defaultIncomeForm);
   const [expenseForm, setExpenseForm] = useState<TransactionFormState>(defaultExpenseForm);
+  const [collectionTarget, setCollectionTarget] = useState<SalonTransaction | null>(null);
+  const [collectionMethod, setCollectionMethod] = useState("Efectivo");
 
   const loadSalonData = useCallback(
     async () => {
@@ -1040,6 +1090,56 @@ export default function PrettyEscritorioPage() {
     }
 
     setTransactions((current) => current.filter((item) => item.id !== id));
+  }
+
+  function openCollectDialog(transaction: SalonTransaction) {
+    if (transaction.kind !== "income" || transaction.status !== "pending") return;
+
+    const suggestedMethod =
+      collectionPaymentMethods.find((method) => method === transaction.paymentMethod) ?? "Efectivo";
+
+    setCollectionTarget(transaction);
+    setCollectionMethod(suggestedMethod);
+  }
+
+  async function collectPendingIncome() {
+    if (!supabase || !userId || !collectionTarget) return;
+    if (collectionTarget.kind !== "income" || collectionTarget.status !== "pending") return;
+
+    const collectionNote = `Cobrado el ${formatDate(todayISO())} por ${collectionMethod}.`;
+    const currentNotes = collectionTarget.notes.trim();
+    const nextNotes = currentNotes ? `${currentNotes}\n${collectionNote}` : collectionNote;
+
+    setCollectingId(collectionTarget.id);
+
+    const { data, error } = await supabase
+      .from("pretty_salon_transactions")
+      .update({
+        payment_method: collectionMethod,
+        status: "paid",
+        notes: nextNotes,
+      })
+      .eq("id", collectionTarget.id)
+      .select(salonTransactionSelect)
+      .single();
+
+    setCollectingId(null);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data) {
+      const updatedTransaction = normalizeTransactionRow(data as SalonTransactionRow);
+      setTransactions((current) =>
+        current.map((item) => (item.id === updatedTransaction.id ? updatedTransaction : item))
+      );
+    } else {
+      await loadSalonData();
+    }
+
+    setCollectionTarget(null);
   }
 
   function startIncomeFromService(service: (typeof serviceCatalog)[number]) {
@@ -1494,7 +1594,9 @@ export default function PrettyEscritorioPage() {
                     transactions={sortedTransactions.slice(0, 6)}
                     emptyMessage="Todavia no hay movimientos."
                     onDelete={deleteTransaction}
+                    onCollect={openCollectDialog}
                     deletingId={deletingId}
+                    collectingId={collectingId}
                   />
                 </div>
               </section>
@@ -1525,7 +1627,9 @@ export default function PrettyEscritorioPage() {
                     transactions={sortedTransactions.filter((item) => item.kind === "income")}
                     emptyMessage="No hay ingresos registrados."
                     onDelete={deleteTransaction}
+                    onCollect={openCollectDialog}
                     deletingId={deletingId}
+                    collectingId={collectingId}
                   />
                 </div>
               </div>
@@ -1556,7 +1660,9 @@ export default function PrettyEscritorioPage() {
                     transactions={sortedTransactions.filter((item) => item.kind === "expense")}
                     emptyMessage="No hay gastos registrados."
                     onDelete={deleteTransaction}
+                    onCollect={openCollectDialog}
                     deletingId={deletingId}
+                    collectingId={collectingId}
                   />
                 </div>
               </div>
@@ -1783,6 +1889,56 @@ export default function PrettyEscritorioPage() {
           ) : null}
         </main>
       </div>
+
+      {collectionTarget ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
+          <div className="w-full max-w-md rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-2xl shadow-black/40">
+            <p className="text-sm font-semibold text-[#00c2a8]">Cobro de credito</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">Marcar como cobrado</h2>
+            <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
+              {collectionTarget.contact || "Cliente"} cancelo{" "}
+              <span className="font-semibold text-[#f7f9fb]">
+                {money.format(collectionTarget.amount)}
+              </span>{" "}
+              por {collectionTarget.concept}.
+            </p>
+
+            <label className="mt-5 block">
+              <span className="text-sm text-[#c7ced6]">Metodo recibido</span>
+              <select
+                value={collectionMethod}
+                onChange={(event) => setCollectionMethod(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+              >
+                {collectionPaymentMethods.map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={collectPendingIncome}
+                disabled={collectingId === collectionTarget.id}
+                className="rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {collectingId === collectionTarget.id ? "Cobrando..." : "Confirmar cobro"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollectionTarget(null)}
+                disabled={collectingId === collectionTarget.id}
+                className="rounded-lg border border-[#454b55] px-4 py-3 text-sm font-semibold text-[#d8dde3] transition hover:border-[#70d6ff] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#30333a] bg-[#15171a]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
