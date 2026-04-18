@@ -1370,10 +1370,10 @@ export default function PrettyEscritorioPage() {
 
           <section className="mt-6 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              label="Ingresos cobrados"
-              value={money.format(paidIncome)}
-              detail={`${money.format(pendingIncome)} por cobrar`}
-              accent="#00c2a8"
+              label="Utilidad real"
+              value={money.format(netProfit)}
+              detail={`${margin.toFixed(1)}% de margen`}
+              accent="#f7d84a"
             />
             <MetricCard
               label="Gastos pagados"
@@ -1382,10 +1382,10 @@ export default function PrettyEscritorioPage() {
               accent="#ff5f7e"
             />
             <MetricCard
-              label="Utilidad real"
-              value={money.format(netProfit)}
-              detail={`${margin.toFixed(1)}% de margen`}
-              accent="#f7d84a"
+              label="Ingresos cobrados"
+              value={money.format(paidIncome)}
+              detail={`${money.format(pendingIncome)} por cobrar`}
+              accent="#00c2a8"
             />
             <MetricCard
               label="Proyeccion"
@@ -1399,7 +1399,7 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "dashboard" ? (
             <>
-              <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+              <section className="mt-6 grid min-w-0 gap-4">
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
                     label="Vista principal"
@@ -1441,50 +1441,6 @@ export default function PrettyEscritorioPage() {
                       <span className="h-3 w-3 rounded-sm bg-[#ff5f7e]" />
                       Gastos
                     </span>
-                  </div>
-                </div>
-
-                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                  <SectionTitle
-                    label="Accesos"
-                    title="Siguiente accion"
-                    description="Elige la opcion que necesitas mover ahora."
-                  />
-                  <div className="mt-5 grid gap-3">
-                    <button
-                      onClick={() => openIncomeForm("Efectivo")}
-                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
-                    >
-                      <span className="block text-sm font-semibold text-[#f7f9fb]">Ingreso cobrado</span>
-                      <span className="mt-1 block text-xs text-[#aeb5bf]">
-                        Efectivo, tarjeta o transferencia
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => openIncomeForm("Credito")}
-                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
-                    >
-                      <span className="block text-sm font-semibold text-[#f7f9fb]">Venta al credito</span>
-                      <span className="mt-1 block text-xs text-[#aeb5bf]">Queda como por cobrar</span>
-                    </button>
-                    <button
-                      onClick={openExpenseForm}
-                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
-                    >
-                      <span className="block text-sm font-semibold text-[#f7f9fb]">Registrar gasto</span>
-                      <span className="mt-1 block text-xs text-[#aeb5bf]">
-                        Insumos, renta, nomina o equipo
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => switchSection("caja")}
-                      className="rounded-lg border border-[#3a3f48] bg-[#101113] px-4 py-3 text-left transition hover:border-[#70d6ff]"
-                    >
-                      <span className="block text-sm font-semibold text-[#f7f9fb]">Revisar caja</span>
-                      <span className="mt-1 block text-xs text-[#aeb5bf]">
-                        Saldo por metodo de pago
-                      </span>
-                    </button>
                   </div>
                 </div>
               </section>
