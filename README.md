@@ -20,6 +20,29 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Supabase setup
+
+Create a Supabase project and run the SQL files from the `supabase` folder in the SQL editor:
+
+```sql
+-- Existing tank module
+-- supabase/dinero_tanque.sql
+
+-- Pretty Salon finance module
+-- supabase/pretty_salon.sql
+```
+
+The app expects email/password auth. Create users from Supabase Auth or enable signups if you want users to register themselves.
+
+Add these variables locally in `.env.local` and in Vercel Project Settings > Environment Variables:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Pretty Salon stores movements in `public.pretty_salon_transactions` with RLS enabled, so each authenticated user can only read and edit their own income and expense records.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

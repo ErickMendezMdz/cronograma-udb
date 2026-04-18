@@ -136,7 +136,7 @@ export default function ModulosPage() {
                   Pretty - Salon de belleza
                 </h2>
                 <p className="mt-3 max-w-md text-sm leading-6 text-[#c2b19f]">
-                  Escritorio principal inspirado en el diseno del salon, listo para seguir construyendo el resto del sistema.
+                  Dashboard para controlar ingresos, gastos, caja, clientes y servicios del salon.
                 </p>
               </div>
               <div className="rounded-2xl bg-[#d6b48a]/15 px-3 py-2 text-sm font-semibold text-[#ecd3b2]">
