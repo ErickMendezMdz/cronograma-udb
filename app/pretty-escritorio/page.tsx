@@ -2001,40 +2001,55 @@ export default function PrettyEscritorioPage() {
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
                     label="Caja"
-                    title="Saldo por metodo de pago"
+                    title="Saldos en caja"
                     description="Ingresos menos gastos pagados, ajustado por traslados internos del mes."
                   />
-                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                    <table className="min-w-[760px] w-full text-left text-sm">
-                      <thead className="bg-[#111316] text-[#aeb5bf]">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Metodo</th>
-                          <th className="px-4 py-3 text-right font-medium">Ingresos</th>
-                          <th className="px-4 py-3 text-right font-medium">Gastos</th>
-                          <th className="px-4 py-3 text-right font-medium">Traslados</th>
-                          <th className="px-4 py-3 text-right font-medium">Saldo</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#30333a]">
-                        {paymentBreakdown.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="px-4 py-6 text-center text-[#aeb5bf]">
-                              Aun no hay movimientos de caja para este mes.
-                            </td>
-                          </tr>
-                        ) : (
-                          paymentBreakdown.map((item) => (
-                            <tr key={item.method}>
-                              <td className="px-4 py-4 text-[#f7f9fb]">{item.method}</td>
-                              <td className="px-4 py-4 text-right text-[#71f2d8]">
+                  {paymentBreakdown.length === 0 ? (
+                    <div className="mt-5 rounded-lg border border-dashed border-[#3a3f48] p-6 text-sm text-[#aeb5bf]">
+                      Aun no hay movimientos de caja para este mes.
+                    </div>
+                  ) : (
+                    <div className="mt-5 grid min-w-0 gap-3 md:grid-cols-2">
+                      {paymentBreakdown.map((item) => (
+                        <article
+                          key={item.method}
+                          className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4"
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-base font-semibold text-[#f7f9fb]">
+                                {item.method}
+                              </p>
+                              <p className="mt-1 text-xs text-[#8f98a5]">Metodo de caja</p>
+                            </div>
+                            <p
+                              className={[
+                                "shrink-0 text-right text-xl font-semibold",
+                                item.balance < 0 ? "text-[#ff8aa1]" : "text-[#f7f9fb]",
+                              ].join(" ")}
+                            >
+                              {money.format(item.balance)}
+                            </p>
+                          </div>
+
+                          <div className="mt-4 grid gap-2 text-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[#aeb5bf]">Ingresos</span>
+                              <span className="font-semibold text-[#71f2d8]">
                                 {money.format(item.income)}
-                              </td>
-                              <td className="px-4 py-4 text-right text-[#ff8aa1]">
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[#aeb5bf]">Gastos</span>
+                              <span className="font-semibold text-[#ff8aa1]">
                                 {money.format(item.expense)}
-                              </td>
-                              <td
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[#aeb5bf]">Traslados</span>
+                              <span
                                 className={[
-                                  "px-4 py-4 text-right",
+                                  "font-semibold",
                                   item.transferNet > 0
                                     ? "text-[#71f2d8]"
                                     : item.transferNet < 0
@@ -2043,21 +2058,13 @@ export default function PrettyEscritorioPage() {
                                 ].join(" ")}
                               >
                                 {formatSignedMoney(item.transferNet)}
-                              </td>
-                              <td
-                                className={[
-                                  "px-4 py-4 text-right font-semibold",
-                                  item.balance < 0 ? "text-[#ff8aa1]" : "text-[#f7f9fb]",
-                                ].join(" ")}
-                              >
-                                {money.format(item.balance)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                              </span>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
