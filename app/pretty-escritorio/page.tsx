@@ -90,6 +90,32 @@ type SalonCashTransferInsert = {
   notes: string;
 };
 
+type SalonExpensePayment = {
+  id: string;
+  date: string;
+  paymentMethod: string;
+  amount: number;
+  notes: string;
+};
+
+type SalonExpensePaymentRow = {
+  id: string;
+  owner_id: string;
+  payment_date: string;
+  payment_method: string;
+  amount: number | string;
+  notes: string | null;
+  created_at: string;
+};
+
+type SalonExpensePaymentInsert = {
+  owner_id: string;
+  payment_date: string;
+  payment_method: string;
+  amount: number;
+  notes: string;
+};
+
 type TransactionFormState = {
   date: string;
   concept: string;
@@ -106,6 +132,13 @@ type CashTransferFormState = {
   fromMethod: string;
   toMethod: string;
   amount: string;
+  notes: string;
+};
+
+type ExpensePaymentFormState = {
+  date: string;
+  amount: string;
+  paymentMethod: string;
   notes: string;
 };
 
@@ -158,14 +191,17 @@ const expenseCategories = [
   "Otros gastos",
 ] as const;
 
-const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia", "Credito"] as const;
-const cashMovementMethods = paymentMethods.filter((method) => method !== "Credito");
+const incomePaymentMethods = ["Efectivo", "Cuenta Banco", "Credito"] as const;
+const expensePaymentMethods = ["Efectivo", "Cuenta Banco", "Tarjeta de credito"] as const;
+const cashMovementMethods = ["Efectivo", "Cuenta Banco"] as const;
 const collectionPaymentMethods = cashMovementMethods;
 
 const salonTransactionSelect =
   "id, owner_id, kind, transaction_date, concept, category, amount, payment_method, status, contact, notes, created_at";
 const salonCashTransferSelect =
   "id, owner_id, transfer_date, from_method, to_method, amount, notes, created_at";
+const salonExpensePaymentSelect =
+  "id, owner_id, payment_date, payment_method, amount, notes, created_at";
 
 const serviceCatalog = [
   {
@@ -262,8 +298,29 @@ function formatMonth(value: string) {
   }).format(new Date(`${value}-01T00:00:00`));
 }
 
+function normalizeCashMethod(paymentMethod: string | null | undefined) {
+  if (paymentMethod === "Tarjeta" || paymentMethod === "Transferencia" || paymentMethod === "Cuenta Banco") {
+    return "Cuenta Banco";
+  }
+
+  return "Efectivo";
+}
+
+function normalizePaymentMethod(kind: TransactionKind, paymentMethod: string | null | undefined) {
+  if (kind === "income") {
+    if (paymentMethod === "Credito" || paymentMethod === "Tarjeta de credito") return "Credito";
+    return normalizeCashMethod(paymentMethod);
+  }
+
+  if (paymentMethod === "Credito" || paymentMethod === "Tarjeta de credito") {
+    return "Tarjeta de credito";
+  }
+
+  return normalizeCashMethod(paymentMethod);
+}
+
 function isCreditPayment(paymentMethod: string) {
-  return paymentMethod === "Credito";
+  return paymentMethod === "Credito" || paymentMethod === "Tarjeta de credito";
 }
 
 function resolveStatusForPayment(paymentMethod: string, status: SalonStatus): SalonStatus {
@@ -304,8 +361,17 @@ function defaultCashTransferForm(): CashTransferFormState {
   return {
     date: todayISO(),
     fromMethod: "Efectivo",
-    toMethod: "Transferencia",
+    toMethod: "Cuenta Banco",
     amount: "",
+    notes: "",
+  };
+}
+
+function defaultExpensePaymentForm(): ExpensePaymentFormState {
+  return {
+    date: todayISO(),
+    amount: "",
+    paymentMethod: "Cuenta Banco",
     notes: "",
   };
 }
@@ -349,6 +415,8 @@ function clearLegacyTransactions(userId: string) {
 }
 
 function normalizeTransactionRow(row: SalonTransactionRow): SalonTransaction {
+  const paymentMethod = normalizePaymentMethod(row.kind, row.payment_method);
+
   return {
     id: row.id,
     kind: row.kind,
@@ -356,8 +424,8 @@ function normalizeTransactionRow(row: SalonTransactionRow): SalonTransaction {
     concept: row.concept,
     category: row.category ?? "General",
     amount: Number(row.amount),
-    paymentMethod: row.payment_method ?? "Efectivo",
-    status: resolveStatusForPayment(row.payment_method ?? "Efectivo", row.status),
+    paymentMethod,
+    status: resolveStatusForPayment(paymentMethod, row.status),
     contact: row.contact ?? "",
     notes: row.notes ?? "",
   };
@@ -367,8 +435,18 @@ function normalizeCashTransferRow(row: SalonCashTransferRow): SalonCashTransfer 
   return {
     id: row.id,
     date: row.transfer_date,
-    fromMethod: row.from_method,
-    toMethod: row.to_method,
+    fromMethod: normalizeCashMethod(row.from_method),
+    toMethod: normalizeCashMethod(row.to_method),
+    amount: Number(row.amount),
+    notes: row.notes ?? "",
+  };
+}
+
+function normalizeExpensePaymentRow(row: SalonExpensePaymentRow): SalonExpensePayment {
+  return {
+    id: row.id,
+    date: row.payment_date,
+    paymentMethod: normalizeCashMethod(row.payment_method),
     amount: Number(row.amount),
     notes: row.notes ?? "",
   };
@@ -378,6 +456,8 @@ function toTransactionInsert(
   ownerId: string,
   item: Omit<SalonTransaction, "id">
 ): SalonTransactionInsert {
+  const paymentMethod = normalizePaymentMethod(item.kind, item.paymentMethod);
+
   return {
     owner_id: ownerId,
     kind: item.kind,
@@ -385,8 +465,8 @@ function toTransactionInsert(
     concept: item.concept,
     category: item.category,
     amount: item.amount,
-    payment_method: item.paymentMethod,
-    status: resolveStatusForPayment(item.paymentMethod, item.status),
+    payment_method: paymentMethod,
+    status: resolveStatusForPayment(paymentMethod, item.status),
     contact: item.contact,
     notes: item.notes,
   };
@@ -399,8 +479,21 @@ function toCashTransferInsert(
   return {
     owner_id: ownerId,
     transfer_date: item.date,
-    from_method: item.fromMethod,
-    to_method: item.toMethod,
+    from_method: normalizeCashMethod(item.fromMethod),
+    to_method: normalizeCashMethod(item.toMethod),
+    amount: item.amount,
+    notes: item.notes,
+  };
+}
+
+function toExpensePaymentInsert(
+  ownerId: string,
+  item: Omit<SalonExpensePayment, "id">
+): SalonExpensePaymentInsert {
+  return {
+    owner_id: ownerId,
+    payment_date: item.date,
+    payment_method: normalizeCashMethod(item.paymentMethod),
     amount: item.amount,
     notes: item.notes,
   };
@@ -521,6 +614,8 @@ function TransactionTable({
   emptyMessage,
   onDelete,
   onCollect,
+  onPayExpense,
+  expensePaidAmounts,
   deletingId,
   collectingId,
 }: {
@@ -528,6 +623,8 @@ function TransactionTable({
   emptyMessage: string;
   onDelete: (id: string) => void | Promise<void>;
   onCollect: (transaction: SalonTransaction) => void;
+  onPayExpense: () => void;
+  expensePaidAmounts?: Map<string, number>;
   deletingId?: string | null;
   collectingId?: string | null;
 }) {
@@ -544,6 +641,11 @@ function TransactionTable({
       <div className="space-y-3 md:hidden">
         {transactions.map((item) => {
           const canCollect = item.kind === "income" && item.status === "pending";
+          const expensePaidAmount = item.kind === "expense" ? (expensePaidAmounts?.get(item.id) ?? 0) : 0;
+          const expensePendingAmount = Math.max(item.amount - expensePaidAmount, 0);
+          const canPayExpense = item.kind === "expense" && item.status === "pending" && expensePendingAmount > 0;
+          const isExpensePaid = item.kind === "expense" && item.status === "pending" && expensePendingAmount <= 0;
+          const isExpensePartial = item.kind === "expense" && expensePaidAmount > 0 && expensePendingAmount > 0;
           const isCollecting = collectingId === item.id;
           const isDeleting = deletingId === item.id;
 
@@ -582,12 +684,18 @@ function TransactionTable({
                 <span
                   className={[
                     "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
-                    item.status === "paid"
+                    item.status === "paid" || isExpensePaid
                       ? "bg-[#0f3b33] text-[#71f2d8]"
-                      : "bg-[#403611] text-[#ffe06b]",
+                      : isExpensePartial
+                        ? "bg-[#193347] text-[#70d6ff]"
+                        : "bg-[#403611] text-[#ffe06b]",
                   ].join(" ")}
                 >
-                  {getStatusLabel(item.status, item.kind)}
+                  {isExpensePartial
+                    ? "Abonado"
+                    : isExpensePaid
+                      ? "Pagado"
+                      : getStatusLabel(item.status, item.kind)}
                 </span>
                 <div className="ml-auto flex flex-wrap justify-end gap-2">
                   {canCollect ? (
@@ -599,6 +707,15 @@ function TransactionTable({
                       {isCollecting ? "Cobrando..." : "Cobrar"}
                     </button>
                   ) : null}
+                  {canPayExpense ? (
+                    <button
+                      onClick={onPayExpense}
+                      disabled={isDeleting}
+                      className="rounded-md border border-[#70d6ff] px-3 py-2 text-xs font-semibold text-[#70d6ff] transition hover:bg-[#132936] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Abonar
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => onDelete(item.id)}
                     disabled={isDeleting || isCollecting}
@@ -608,6 +725,13 @@ function TransactionTable({
                   </button>
                 </div>
               </div>
+
+              {isExpensePartial ? (
+                <p className="mt-3 text-xs leading-5 text-[#aeb5bf]">
+                  Abonado {money.format(expensePaidAmount)} de {money.format(item.amount)}.
+                  Pendiente {money.format(expensePendingAmount)}.
+                </p>
+              ) : null}
 
               {item.notes ? (
                 <p className="mt-3 whitespace-pre-line text-xs leading-5 text-[#aeb5bf]">
@@ -634,19 +758,30 @@ function TransactionTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-[#30333a] bg-[#181a1e]">
-            {transactions.map((item) => {
-              const canCollect = item.kind === "income" && item.status === "pending";
-              const isCollecting = collectingId === item.id;
-              const isDeleting = deletingId === item.id;
+          {transactions.map((item) => {
+            const canCollect = item.kind === "income" && item.status === "pending";
+            const expensePaidAmount = item.kind === "expense" ? (expensePaidAmounts?.get(item.id) ?? 0) : 0;
+            const expensePendingAmount = Math.max(item.amount - expensePaidAmount, 0);
+            const canPayExpense = item.kind === "expense" && item.status === "pending" && expensePendingAmount > 0;
+            const isExpensePaid = item.kind === "expense" && item.status === "pending" && expensePendingAmount <= 0;
+            const isExpensePartial = item.kind === "expense" && expensePaidAmount > 0 && expensePendingAmount > 0;
+            const isCollecting = collectingId === item.id;
+            const isDeleting = deletingId === item.id;
 
               return (
                 <tr key={item.id} className="align-top">
                   <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
                   <td className="px-4 py-4">
-                    <p className="font-medium text-[#f7f9fb]">{item.concept}</p>
-                    {item.notes ? (
-                      <p className="mt-1 whitespace-pre-line text-xs text-[#aeb5bf]">
-                        {item.notes}
+                  <p className="font-medium text-[#f7f9fb]">{item.concept}</p>
+                  {isExpensePartial ? (
+                    <p className="mt-1 text-xs text-[#70d6ff]">
+                      Abonado {money.format(expensePaidAmount)} de {money.format(item.amount)}.
+                      Pendiente {money.format(expensePendingAmount)}.
+                    </p>
+                  ) : null}
+                  {item.notes ? (
+                    <p className="mt-1 whitespace-pre-line text-xs text-[#aeb5bf]">
+                      {item.notes}
                       </p>
                     ) : null}
                   </td>
@@ -656,15 +791,21 @@ function TransactionTable({
                   <td className="px-4 py-4">
                     <span
                       className={[
-                        "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
-                        item.status === "paid"
-                          ? "bg-[#0f3b33] text-[#71f2d8]"
+                      "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
+                      item.status === "paid" || isExpensePaid
+                        ? "bg-[#0f3b33] text-[#71f2d8]"
+                        : isExpensePartial
+                          ? "bg-[#193347] text-[#70d6ff]"
                           : "bg-[#403611] text-[#ffe06b]",
-                      ].join(" ")}
-                    >
-                      {getStatusLabel(item.status, item.kind)}
-                    </span>
-                  </td>
+                    ].join(" ")}
+                  >
+                    {isExpensePartial
+                      ? "Abonado"
+                      : isExpensePaid
+                        ? "Pagado"
+                        : getStatusLabel(item.status, item.kind)}
+                  </span>
+                </td>
                   <td
                     className={[
                       "px-4 py-4 text-right font-semibold",
@@ -681,12 +822,21 @@ function TransactionTable({
                           onClick={() => onCollect(item)}
                           disabled={isCollecting || isDeleting}
                           className="rounded-md border border-[#00c2a8] px-3 py-1.5 text-xs font-semibold text-[#71f2d8] transition hover:bg-[#0f312e] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isCollecting ? "Cobrando..." : "Cobrar"}
-                        </button>
-                      ) : null}
+                      >
+                        {isCollecting ? "Cobrando..." : "Cobrar"}
+                      </button>
+                    ) : null}
+                    {canPayExpense ? (
                       <button
-                        onClick={() => onDelete(item.id)}
+                        onClick={onPayExpense}
+                        disabled={isDeleting}
+                        className="rounded-md border border-[#70d6ff] px-3 py-1.5 text-xs font-semibold text-[#70d6ff] transition hover:bg-[#132936] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Abonar
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => onDelete(item.id)}
                         disabled={isDeleting || isCollecting}
                         className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
                       >
@@ -710,6 +860,7 @@ function TransactionForm({
   description,
   form,
   categories,
+  methods,
   submitLabel,
   submitting,
   onChange,
@@ -720,6 +871,7 @@ function TransactionForm({
   description: string;
   form: TransactionFormState;
   categories: readonly string[];
+  methods: readonly string[];
   submitLabel: string;
   submitting?: boolean;
   onChange: <K extends keyof TransactionFormState>(
@@ -735,7 +887,7 @@ function TransactionForm({
         ? "Credito se guarda como por cobrar."
         : "Marca por cobrar solo si aun no recibiste el dinero."
       : creditSelected
-        ? "Credito se guarda como por pagar."
+        ? "Tarjeta de credito se guarda como por pagar."
         : "Marca por pagar solo si aun no salio el dinero.";
 
   return (
@@ -800,7 +952,7 @@ function TransactionForm({
             onChange={(event) => onChange("paymentMethod", event.target.value)}
             className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
           >
-            {paymentMethods.map((method) => (
+            {methods.map((method) => (
               <option key={method} value={method}>
                 {method}
               </option>
@@ -879,7 +1031,7 @@ function CashTransferForm({
     <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
       <h3 className="text-xl font-semibold text-[#f7f9fb]">Trasladar dinero</h3>
       <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
-        Mueve saldo entre efectivo, tarjeta o transferencia sin crear ingreso ni gasto.
+        Mueve saldo entre efectivo y cuenta banco sin crear ingreso ni gasto.
       </p>
 
       <div className="mt-5 grid gap-4">
@@ -962,6 +1114,112 @@ function CashTransferForm({
   );
 }
 
+function ExpensePaymentDialog({
+  form,
+  pendingTotal,
+  submitting,
+  onChange,
+  onSubmit,
+  onClose,
+}: {
+  form: ExpensePaymentFormState;
+  pendingTotal: number;
+  submitting?: boolean;
+  onChange: <K extends keyof ExpensePaymentFormState>(
+    field: K,
+    value: ExpensePaymentFormState[K]
+  ) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-md rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-2xl shadow-black/40"
+      >
+        <p className="text-sm font-semibold text-[#00c2a8]">Deuda de tarjeta</p>
+        <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">Registrar abono</h2>
+        <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
+          Pendiente actual:{" "}
+          <span className="font-semibold text-[#ffe06b]">{money.format(pendingTotal)}</span>.
+          El abono se aplica primero a la compra mas antigua.
+        </p>
+
+        <div className="mt-5 grid gap-4">
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Monto a abonar</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={form.amount}
+              onChange={(event) => onChange("amount", event.target.value)}
+              placeholder="0.00"
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Fecha</span>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(event) => onChange("date", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Sale de</span>
+            <select
+              value={form.paymentMethod}
+              onChange={(event) => onChange("paymentMethod", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            >
+              {cashMovementMethods.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Notas</span>
+            <textarea
+              value={form.notes}
+              onChange={(event) => onChange("notes", event.target.value)}
+              rows={3}
+              placeholder="Ej. Abono mensual a tarjeta de credito"
+              className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            />
+          </label>
+        </div>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? "Guardando..." : "Confirmar abono"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-lg border border-[#454b55] px-4 py-3 text-sm font-semibold text-[#d8dde3] transition hover:border-[#70d6ff] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function PrettyEscritorioPage() {
   const router = useRouter();
   const actionAreaRef = useRef<HTMLDivElement>(null);
@@ -974,8 +1232,10 @@ export default function PrettyEscritorioPage() {
   const [migrationNotice, setMigrationNotice] = useState<string | null>(null);
   const [savingKind, setSavingKind] = useState<TransactionKind | null>(null);
   const [savingCashTransfer, setSavingCashTransfer] = useState(false);
+  const [savingExpensePayment, setSavingExpensePayment] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingCashTransferId, setDeletingCashTransferId] = useState<string | null>(null);
+  const [deletingExpensePaymentId, setDeletingExpensePaymentId] = useState<string | null>(null);
   const [collectingId, setCollectingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -983,11 +1243,16 @@ export default function PrettyEscritorioPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthISO);
   const [transactions, setTransactions] = useState<SalonTransaction[]>([]);
   const [cashTransfers, setCashTransfers] = useState<SalonCashTransfer[]>([]);
+  const [expensePayments, setExpensePayments] = useState<SalonExpensePayment[]>([]);
   const [incomeForm, setIncomeForm] = useState<TransactionFormState>(defaultIncomeForm);
   const [expenseForm, setExpenseForm] = useState<TransactionFormState>(defaultExpenseForm);
   const [cashTransferForm, setCashTransferForm] = useState<CashTransferFormState>(
     defaultCashTransferForm
   );
+  const [expensePaymentForm, setExpensePaymentForm] = useState<ExpensePaymentFormState>(
+    defaultExpensePaymentForm
+  );
+  const [expensePaymentDialogOpen, setExpensePaymentDialogOpen] = useState(false);
   const [collectionTarget, setCollectionTarget] = useState<SalonTransaction | null>(null);
   const [collectionMethod, setCollectionMethod] = useState("Efectivo");
 
@@ -998,7 +1263,7 @@ export default function PrettyEscritorioPage() {
       setLoadingData(true);
       setLoadError(null);
 
-      const [transactionsResult, transfersResult] = await Promise.all([
+      const [transactionsResult, transfersResult, expensePaymentsResult] = await Promise.all([
         supabase
           .from("pretty_salon_transactions")
           .select(salonTransactionSelect)
@@ -1009,12 +1274,18 @@ export default function PrettyEscritorioPage() {
           .select(salonCashTransferSelect)
           .order("transfer_date", { ascending: false })
           .order("created_at", { ascending: false }),
+        supabase
+          .from("pretty_salon_expense_payments")
+          .select(salonExpensePaymentSelect)
+          .order("payment_date", { ascending: false })
+          .order("created_at", { ascending: false }),
       ]);
 
       setLoadingData(false);
 
-      if (transactionsResult.error || transfersResult.error) {
-        const error = transactionsResult.error ?? transfersResult.error;
+      if (transactionsResult.error || transfersResult.error || expensePaymentsResult.error) {
+        const error =
+          transactionsResult.error ?? transfersResult.error ?? expensePaymentsResult.error;
         setLoadError(
           `${error?.message ?? "No pude cargar los datos"}. Ejecuta supabase/pretty_salon.sql en tu proyecto de Supabase.`
         );
@@ -1026,6 +1297,11 @@ export default function PrettyEscritorioPage() {
       );
       setCashTransfers(
         ((transfersResult.data as SalonCashTransferRow[] | null) ?? []).map(normalizeCashTransferRow)
+      );
+      setExpensePayments(
+        ((expensePaymentsResult.data as SalonExpensePaymentRow[] | null) ?? []).map(
+          normalizeExpensePaymentRow
+        )
       );
       return true;
     },
@@ -1189,6 +1465,22 @@ export default function PrettyEscritorioPage() {
     setCashTransferForm((current) => ({ ...current, [field]: value }));
   }
 
+  function updateExpensePaymentForm<K extends keyof ExpensePaymentFormState>(
+    field: K,
+    value: ExpensePaymentFormState[K]
+  ) {
+    setExpensePaymentForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function openExpensePaymentDialog() {
+    setExpensePaymentForm((current) => ({
+      ...current,
+      date: current.date || todayISO(),
+      paymentMethod: normalizeCashMethod(current.paymentMethod),
+    }));
+    setExpensePaymentDialogOpen(true);
+  }
+
   function openIncomeForm(paymentMethod = "Efectivo") {
     setIncomeForm((current) => ({
       ...current,
@@ -1332,6 +1624,60 @@ export default function PrettyEscritorioPage() {
     setActiveSection("caja");
   }
 
+  async function addExpensePayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!supabase || !userId) return;
+
+    const amount = Number(expensePaymentForm.amount);
+    const roundedAmount = Math.round(amount * 100) / 100;
+
+    if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) {
+      alert("El abono debe ser mayor que cero.");
+      return;
+    }
+
+    if (roundedAmount > totalPendingExpenses + 0.001) {
+      alert(`El abono supera lo pendiente por pagar: ${money.format(totalPendingExpenses)}.`);
+      return;
+    }
+
+    const next: Omit<SalonExpensePayment, "id"> = {
+      date: expensePaymentForm.date || todayISO(),
+      paymentMethod: normalizeCashMethod(expensePaymentForm.paymentMethod),
+      amount: roundedAmount,
+      notes: expensePaymentForm.notes.trim(),
+    };
+
+    setSavingExpensePayment(true);
+
+    const { data, error } = await supabase
+      .from("pretty_salon_expense_payments")
+      .insert(toExpensePaymentInsert(userId, next))
+      .select(salonExpensePaymentSelect)
+      .single();
+
+    setSavingExpensePayment(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data) {
+      setExpensePayments((current) => [
+        normalizeExpensePaymentRow(data as SalonExpensePaymentRow),
+        ...current,
+      ]);
+    } else {
+      await loadSalonData();
+    }
+
+    setExpensePaymentForm(defaultExpensePaymentForm());
+    setExpensePaymentDialogOpen(false);
+    setActiveSection("caja");
+  }
+
   async function deleteTransaction(id: string) {
     if (!supabase || !userId) return;
 
@@ -1372,11 +1718,32 @@ export default function PrettyEscritorioPage() {
     setCashTransfers((current) => current.filter((item) => item.id !== id));
   }
 
+  async function deleteExpensePayment(id: string) {
+    if (!supabase || !userId) return;
+
+    setDeletingExpensePaymentId(id);
+
+    const { error } = await supabase
+      .from("pretty_salon_expense_payments")
+      .delete()
+      .eq("id", id);
+
+    setDeletingExpensePaymentId(null);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setExpensePayments((current) => current.filter((item) => item.id !== id));
+  }
+
   function openCollectDialog(transaction: SalonTransaction) {
     if (transaction.kind !== "income" || transaction.status !== "pending") return;
 
     const suggestedMethod =
-      collectionPaymentMethods.find((method) => method === transaction.paymentMethod) ?? "Efectivo";
+      collectionPaymentMethods.find((method) => method === normalizeCashMethod(transaction.paymentMethod)) ??
+      "Efectivo";
 
     setCollectionTarget(transaction);
     setCollectionMethod(suggestedMethod);
@@ -1395,7 +1762,7 @@ export default function PrettyEscritorioPage() {
     const { data, error } = await supabase
       .from("pretty_salon_transactions")
       .update({
-        payment_method: collectionMethod,
+        payment_method: normalizeCashMethod(collectionMethod),
         status: "paid",
         notes: nextNotes,
       })
@@ -1447,6 +1814,13 @@ export default function PrettyEscritorioPage() {
     });
   }, [cashTransfers]);
 
+  const sortedExpensePayments = useMemo(() => {
+    return [...expensePayments].sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      return b.id.localeCompare(a.id);
+    });
+  }, [expensePayments]);
+
   const monthOptions = useMemo(() => {
     return [
       ...new Set([
@@ -1454,10 +1828,11 @@ export default function PrettyEscritorioPage() {
         currentMonthISO(),
         ...transactions.map((item) => item.date.slice(0, 7)),
         ...cashTransfers.map((item) => item.date.slice(0, 7)),
+        ...expensePayments.map((item) => item.date.slice(0, 7)),
       ]),
     ]
       .sort((a, b) => b.localeCompare(a));
-  }, [cashTransfers, selectedMonth, transactions]);
+  }, [cashTransfers, expensePayments, selectedMonth, transactions]);
 
   const monthlyTransactions = useMemo(() => {
     return sortedTransactions.filter((item) => item.date.startsWith(selectedMonth));
@@ -1466,6 +1841,49 @@ export default function PrettyEscritorioPage() {
   const monthlyCashTransfers = useMemo(() => {
     return sortedCashTransfers.filter((item) => item.date.startsWith(selectedMonth));
   }, [selectedMonth, sortedCashTransfers]);
+
+  const monthlyExpensePayments = useMemo(() => {
+    return sortedExpensePayments.filter((item) => item.date.startsWith(selectedMonth));
+  }, [selectedMonth, sortedExpensePayments]);
+
+  const expensePaymentAllocations = useMemo(() => {
+    const allocation = new Map<string, number>();
+    const pendingExpenseQueue = [...transactions]
+      .filter((item) => item.kind === "expense" && item.status === "pending")
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.id.localeCompare(b.id);
+      })
+      .map((item) => ({ id: item.id, remaining: item.amount }));
+
+    let expenseIndex = 0;
+
+    for (const payment of [...expensePayments].sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.id.localeCompare(b.id);
+    })) {
+      let remainingPayment = payment.amount;
+
+      while (remainingPayment > 0 && expenseIndex < pendingExpenseQueue.length) {
+        const currentExpense = pendingExpenseQueue[expenseIndex];
+        const appliedAmount = Math.min(currentExpense.remaining, remainingPayment);
+
+        allocation.set(
+          currentExpense.id,
+          (allocation.get(currentExpense.id) ?? 0) + appliedAmount
+        );
+
+        currentExpense.remaining = Math.round((currentExpense.remaining - appliedAmount) * 100) / 100;
+        remainingPayment = Math.round((remainingPayment - appliedAmount) * 100) / 100;
+
+        if (currentExpense.remaining <= 0.001) {
+          expenseIndex += 1;
+        }
+      }
+    }
+
+    return allocation;
+  }, [expensePayments, transactions]);
 
   const paidIncome = useMemo(() => {
     return sumAmounts(
@@ -1480,16 +1898,29 @@ export default function PrettyEscritorioPage() {
   }, [monthlyTransactions]);
 
   const paidExpenses = useMemo(() => {
-    return sumAmounts(
+    const paidAtPurchase = sumAmounts(
       monthlyTransactions.filter((item) => item.kind === "expense" && item.status === "paid")
     );
-  }, [monthlyTransactions]);
+    const paidByAbonos = monthlyExpensePayments.reduce((total, item) => total + item.amount, 0);
+
+    return paidAtPurchase + paidByAbonos;
+  }, [monthlyExpensePayments, monthlyTransactions]);
 
   const pendingExpenses = useMemo(() => {
-    return sumAmounts(
-      monthlyTransactions.filter((item) => item.kind === "expense" && item.status === "pending")
-    );
-  }, [monthlyTransactions]);
+    return monthlyTransactions
+      .filter((item) => item.kind === "expense" && item.status === "pending")
+      .reduce((total, item) => {
+        const paidAmount = expensePaymentAllocations.get(item.id) ?? 0;
+        return total + Math.max(item.amount - paidAmount, 0);
+      }, 0);
+  }, [expensePaymentAllocations, monthlyTransactions]);
+
+  const totalPendingExpenses = transactions
+    .filter((item) => item.kind === "expense" && item.status === "pending")
+    .reduce((total, item) => {
+      const paidAmount = expensePaymentAllocations.get(item.id) ?? 0;
+      return total + Math.max(item.amount - paidAmount, 0);
+    }, 0);
 
   const netProfit = paidIncome - paidExpenses;
   const projectedProfit = paidIncome + pendingIncome - paidExpenses - pendingExpenses;
@@ -1503,11 +1934,18 @@ export default function PrettyEscritorioPage() {
   }, [monthlyTransactions]);
 
   const expenseBreakdown = useMemo(() => {
-    return buildBreakdown(
-      monthlyTransactions.filter((item) => item.kind === "expense" && item.status === "paid"),
-      ["#ff5f7e", "#f7d84a", "#70d6ff", "#b8f060", "#00c2a8"]
-    );
-  }, [monthlyTransactions]);
+    const paidExpensePortions = monthlyTransactions
+      .filter((item) => item.kind === "expense")
+      .map((item) => {
+        if (item.status === "paid") return item;
+
+        const paidAmount = Math.min(expensePaymentAllocations.get(item.id) ?? 0, item.amount);
+        return { ...item, amount: paidAmount };
+      })
+      .filter((item) => item.amount > 0);
+
+    return buildBreakdown(paidExpensePortions, ["#ff5f7e", "#f7d84a", "#70d6ff", "#b8f060", "#00c2a8"]);
+  }, [expensePaymentAllocations, monthlyTransactions]);
 
   const dailyTrend = useMemo(() => {
     return Array.from({ length: 10 }, (_, index) => {
@@ -1515,8 +1953,11 @@ export default function PrettyEscritorioPage() {
       const dayTransactions = transactions.filter(
         (item) => item.date === date && item.status === "paid"
       );
+      const dayExpensePayments = expensePayments.filter((item) => item.date === date);
       const income = sumAmounts(dayTransactions.filter((item) => item.kind === "income"));
-      const expense = sumAmounts(dayTransactions.filter((item) => item.kind === "expense"));
+      const expense =
+        sumAmounts(dayTransactions.filter((item) => item.kind === "expense")) +
+        dayExpensePayments.reduce((total, item) => total + item.amount, 0);
 
       return {
         date,
@@ -1525,7 +1966,7 @@ export default function PrettyEscritorioPage() {
         expense,
       };
     });
-  }, [transactions]);
+  }, [expensePayments, transactions]);
 
   const trendMax = Math.max(
     1,
@@ -1539,7 +1980,7 @@ export default function PrettyEscritorioPage() {
     >();
 
     function getMethod(method: string) {
-      const key = method || "Otro";
+      const key = normalizeCashMethod(method);
       const current = grouped.get(key) ?? {
         method: key,
         income: 0,
@@ -1563,6 +2004,10 @@ export default function PrettyEscritorioPage() {
 
     }
 
+    for (const item of monthlyExpensePayments) {
+      getMethod(item.paymentMethod).expense += item.amount;
+    }
+
     for (const item of monthlyCashTransfers) {
       getMethod(item.fromMethod).transferOut += item.amount;
       getMethod(item.toMethod).transferIn += item.amount;
@@ -1575,7 +2020,7 @@ export default function PrettyEscritorioPage() {
         balance: item.income - item.expense + item.transferIn - item.transferOut,
       }))
       .sort((a, b) => b.balance - a.balance);
-  }, [monthlyCashTransfers, monthlyTransactions]);
+  }, [monthlyCashTransfers, monthlyExpensePayments, monthlyTransactions]);
 
   const cashTransferVolume = useMemo(() => {
     return monthlyCashTransfers.reduce((total, item) => total + item.amount, 0);
@@ -1615,13 +2060,23 @@ export default function PrettyEscritorioPage() {
   const monthlyReports = useMemo(() => {
     return monthOptions.map((month) => {
       const items = transactions.filter((item) => item.date.startsWith(month));
+      const payments = expensePayments.filter((item) => item.date.startsWith(month));
       const income = sumAmounts(
         items.filter((item) => item.kind === "income" && item.status === "paid")
       );
-      const expenses = sumAmounts(
-        items.filter((item) => item.kind === "expense" && item.status === "paid")
+      const expenses =
+        sumAmounts(items.filter((item) => item.kind === "expense" && item.status === "paid")) +
+        payments.reduce((total, item) => total + item.amount, 0);
+      const pendingIncomeForMonth = sumAmounts(
+        items.filter((item) => item.kind === "income" && item.status === "pending")
       );
-      const pending = sumAmounts(items.filter((item) => item.status === "pending"));
+      const pendingExpensesForMonth = items
+        .filter((item) => item.kind === "expense" && item.status === "pending")
+        .reduce((total, item) => {
+          const paidAmount = expensePaymentAllocations.get(item.id) ?? 0;
+          return total + Math.max(item.amount - paidAmount, 0);
+        }, 0);
+      const pending = pendingIncomeForMonth + pendingExpensesForMonth;
       const profit = income - expenses;
 
       return {
@@ -1633,7 +2088,7 @@ export default function PrettyEscritorioPage() {
         margin: income > 0 ? (profit / income) * 100 : 0,
       };
     });
-  }, [monthOptions, transactions]);
+  }, [expensePaymentAllocations, expensePayments, monthOptions, transactions]);
 
   if (checking) {
     return (
@@ -1921,6 +2376,8 @@ export default function PrettyEscritorioPage() {
                     emptyMessage="Todavia no hay movimientos."
                     onDelete={deleteTransaction}
                     onCollect={openCollectDialog}
+                    onPayExpense={openExpensePaymentDialog}
+                    expensePaidAmounts={expensePaymentAllocations}
                     deletingId={deletingId}
                     collectingId={collectingId}
                   />
@@ -1937,6 +2394,7 @@ export default function PrettyEscritorioPage() {
                 description="Guarda cobros de servicios, ventas de producto, membresias, paquetes o propinas."
                 form={incomeForm}
                 categories={incomeCategories}
+                methods={incomePaymentMethods}
                 submitLabel="Guardar ingreso"
                 submitting={savingKind === "income"}
                 onChange={updateIncomeForm}
@@ -1954,6 +2412,8 @@ export default function PrettyEscritorioPage() {
                     emptyMessage="No hay ingresos registrados."
                     onDelete={deleteTransaction}
                     onCollect={openCollectDialog}
+                    onPayExpense={openExpensePaymentDialog}
+                    expensePaidAmounts={expensePaymentAllocations}
                     deletingId={deletingId}
                     collectingId={collectingId}
                   />
@@ -1970,6 +2430,7 @@ export default function PrettyEscritorioPage() {
                 description="Controla insumos, nomina, renta, servicios basicos, marketing, limpieza y equipo."
                 form={expenseForm}
                 categories={expenseCategories}
+                methods={expensePaymentMethods}
                 submitLabel="Guardar gasto"
                 submitting={savingKind === "expense"}
                 onChange={updateExpenseForm}
@@ -1987,6 +2448,8 @@ export default function PrettyEscritorioPage() {
                     emptyMessage="No hay gastos registrados."
                     onDelete={deleteTransaction}
                     onCollect={openCollectDialog}
+                    onPayExpense={openExpensePaymentDialog}
+                    expensePaidAmounts={expensePaymentAllocations}
                     deletingId={deletingId}
                     collectingId={collectingId}
                   />
@@ -2120,6 +2583,67 @@ export default function PrettyEscritorioPage() {
                     </table>
                   </div>
                 </div>
+
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <SectionTitle
+                      label="Deuda"
+                      title="Abonos a tarjeta"
+                      description="Pagos reales aplicados a los gastos por pagar mas antiguos."
+                    />
+                    <button
+                      onClick={openExpensePaymentDialog}
+                      disabled={totalPendingExpenses <= 0}
+                      className="rounded-lg border border-[#70d6ff] px-4 py-2 text-sm font-semibold text-[#70d6ff] transition hover:bg-[#132936] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Registrar abono
+                    </button>
+                  </div>
+                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
+                    <table className="min-w-[640px] w-full text-left text-sm">
+                      <thead className="bg-[#111316] text-[#aeb5bf]">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Fecha</th>
+                          <th className="px-4 py-3 font-medium">Sale de</th>
+                          <th className="px-4 py-3 text-right font-medium">Monto</th>
+                          <th className="px-4 py-3 font-medium">Notas</th>
+                          <th className="px-4 py-3 text-right font-medium">Accion</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#30333a]">
+                        {monthlyExpensePayments.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-6 text-center text-[#aeb5bf]">
+                              Aun no hay abonos a tarjeta en este mes.
+                            </td>
+                          </tr>
+                        ) : (
+                          monthlyExpensePayments.map((item) => (
+                            <tr key={item.id} className="align-top">
+                              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
+                              <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
+                              <td className="px-4 py-4 text-right font-semibold text-[#ff8aa1]">
+                                {money.format(item.amount)}
+                              </td>
+                              <td className="px-4 py-4 text-[#aeb5bf]">
+                                {item.notes || "Aplicado a deuda mas antigua"}
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <button
+                                  onClick={() => deleteExpensePayment(item.id)}
+                                  disabled={deletingExpensePaymentId === item.id}
+                                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {deletingExpensePaymentId === item.id ? "Eliminando..." : "Eliminar"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
 
               <div className="grid min-w-0 gap-4">
@@ -2137,6 +2661,12 @@ export default function PrettyEscritorioPage() {
                     <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
                       <span className="text-[#aeb5bf]">Por cobrar</span>
                       <span className="font-semibold text-[#ffe06b]">{money.format(pendingIncome)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
+                      <span className="text-[#aeb5bf]">Por pagar</span>
+                      <span className="font-semibold text-[#ffe06b]">
+                        {money.format(totalPendingExpenses)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
                       <span className="text-[#aeb5bf]">Pagado</span>
@@ -2368,6 +2898,17 @@ export default function PrettyEscritorioPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {expensePaymentDialogOpen ? (
+        <ExpensePaymentDialog
+          form={expensePaymentForm}
+          pendingTotal={totalPendingExpenses}
+          submitting={savingExpensePayment}
+          onChange={updateExpensePaymentForm}
+          onSubmit={addExpensePayment}
+          onClose={() => setExpensePaymentDialogOpen(false)}
+        />
       ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#30333a] bg-[#15171a]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:hidden">
