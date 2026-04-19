@@ -61,6 +61,35 @@ type SalonTransactionInsert = {
   notes: string;
 };
 
+type SalonCashTransfer = {
+  id: string;
+  date: string;
+  fromMethod: string;
+  toMethod: string;
+  amount: number;
+  notes: string;
+};
+
+type SalonCashTransferRow = {
+  id: string;
+  owner_id: string;
+  transfer_date: string;
+  from_method: string;
+  to_method: string;
+  amount: number | string;
+  notes: string | null;
+  created_at: string;
+};
+
+type SalonCashTransferInsert = {
+  owner_id: string;
+  transfer_date: string;
+  from_method: string;
+  to_method: string;
+  amount: number;
+  notes: string;
+};
+
 type TransactionFormState = {
   date: string;
   concept: string;
@@ -69,6 +98,14 @@ type TransactionFormState = {
   paymentMethod: string;
   status: SalonStatus;
   contact: string;
+  notes: string;
+};
+
+type CashTransferFormState = {
+  date: string;
+  fromMethod: string;
+  toMethod: string;
+  amount: string;
   notes: string;
 };
 
@@ -122,10 +159,13 @@ const expenseCategories = [
 ] as const;
 
 const paymentMethods = ["Efectivo", "Tarjeta", "Transferencia", "Credito"] as const;
-const collectionPaymentMethods = paymentMethods.filter((method) => method !== "Credito");
+const cashMovementMethods = paymentMethods.filter((method) => method !== "Credito");
+const collectionPaymentMethods = cashMovementMethods;
 
 const salonTransactionSelect =
   "id, owner_id, kind, transaction_date, concept, category, amount, payment_method, status, contact, notes, created_at";
+const salonCashTransferSelect =
+  "id, owner_id, transfer_date, from_method, to_method, amount, notes, created_at";
 
 const serviceCatalog = [
   {
@@ -260,6 +300,16 @@ function defaultExpenseForm(): TransactionFormState {
   };
 }
 
+function defaultCashTransferForm(): CashTransferFormState {
+  return {
+    date: todayISO(),
+    fromMethod: "Efectivo",
+    toMethod: "Transferencia",
+    amount: "",
+    notes: "",
+  };
+}
+
 function isSalonTransaction(item: unknown): item is SalonTransaction {
   if (!item || typeof item !== "object") return false;
 
@@ -313,6 +363,17 @@ function normalizeTransactionRow(row: SalonTransactionRow): SalonTransaction {
   };
 }
 
+function normalizeCashTransferRow(row: SalonCashTransferRow): SalonCashTransfer {
+  return {
+    id: row.id,
+    date: row.transfer_date,
+    fromMethod: row.from_method,
+    toMethod: row.to_method,
+    amount: Number(row.amount),
+    notes: row.notes ?? "",
+  };
+}
+
 function toTransactionInsert(
   ownerId: string,
   item: Omit<SalonTransaction, "id">
@@ -331,8 +392,29 @@ function toTransactionInsert(
   };
 }
 
+function toCashTransferInsert(
+  ownerId: string,
+  item: Omit<SalonCashTransfer, "id">
+): SalonCashTransferInsert {
+  return {
+    owner_id: ownerId,
+    transfer_date: item.date,
+    from_method: item.fromMethod,
+    to_method: item.toMethod,
+    amount: item.amount,
+    notes: item.notes,
+  };
+}
+
 function sumAmounts(items: SalonTransaction[]) {
   return items.reduce((total, item) => total + item.amount, 0);
+}
+
+function formatSignedMoney(value: number) {
+  if (value === 0) return money.format(0);
+
+  const formatted = money.format(Math.abs(value));
+  return value > 0 ? `+${formatted}` : `-${formatted}`;
 }
 
 function buildBreakdown(items: SalonTransaction[], colors: string[]): BreakdownItem[] {
@@ -779,6 +861,107 @@ function TransactionForm({
   );
 }
 
+function CashTransferForm({
+  form,
+  submitting,
+  onChange,
+  onSubmit,
+}: {
+  form: CashTransferFormState;
+  submitting?: boolean;
+  onChange: <K extends keyof CashTransferFormState>(
+    field: K,
+    value: CashTransferFormState[K]
+  ) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+      <h3 className="text-xl font-semibold text-[#f7f9fb]">Trasladar dinero</h3>
+      <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
+        Mueve saldo entre efectivo, tarjeta o transferencia sin crear ingreso ni gasto.
+      </p>
+
+      <div className="mt-5 grid gap-4">
+        <label className="block">
+          <span className="text-sm text-[#c7ced6]">Monto</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={form.amount}
+            onChange={(event) => onChange("amount", event.target.value)}
+            placeholder="0.00"
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm text-[#c7ced6]">Fecha</span>
+          <input
+            type="date"
+            value={form.date}
+            onChange={(event) => onChange("date", event.target.value)}
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+          />
+        </label>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Sale de</span>
+            <select
+              value={form.fromMethod}
+              onChange={(event) => onChange("fromMethod", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            >
+              {cashMovementMethods.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Entra a</span>
+            <select
+              value={form.toMethod}
+              onChange={(event) => onChange("toMethod", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            >
+              {cashMovementMethods.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="text-sm text-[#c7ced6]">Notas</span>
+          <textarea
+            value={form.notes}
+            onChange={(event) => onChange("notes", event.target.value)}
+            rows={3}
+            placeholder="Ej. Tome efectivo y transferi a la cuenta del salon"
+            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+          />
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-4 text-base font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60 sm:py-3 sm:text-sm"
+      >
+        {submitting ? "Guardando..." : "Guardar traslado"}
+      </button>
+    </form>
+  );
+}
+
 export default function PrettyEscritorioPage() {
   const router = useRouter();
   const actionAreaRef = useRef<HTMLDivElement>(null);
@@ -790,15 +973,21 @@ export default function PrettyEscritorioPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [migrationNotice, setMigrationNotice] = useState<string | null>(null);
   const [savingKind, setSavingKind] = useState<TransactionKind | null>(null);
+  const [savingCashTransfer, setSavingCashTransfer] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingCashTransferId, setDeletingCashTransferId] = useState<string | null>(null);
   const [collectingId, setCollectingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
   const [selectedMonth, setSelectedMonth] = useState(currentMonthISO);
   const [transactions, setTransactions] = useState<SalonTransaction[]>([]);
+  const [cashTransfers, setCashTransfers] = useState<SalonCashTransfer[]>([]);
   const [incomeForm, setIncomeForm] = useState<TransactionFormState>(defaultIncomeForm);
   const [expenseForm, setExpenseForm] = useState<TransactionFormState>(defaultExpenseForm);
+  const [cashTransferForm, setCashTransferForm] = useState<CashTransferFormState>(
+    defaultCashTransferForm
+  );
   const [collectionTarget, setCollectionTarget] = useState<SalonTransaction | null>(null);
   const [collectionMethod, setCollectionMethod] = useState("Efectivo");
 
@@ -809,23 +998,34 @@ export default function PrettyEscritorioPage() {
       setLoadingData(true);
       setLoadError(null);
 
-      const { data, error } = await supabase
-        .from("pretty_salon_transactions")
-        .select(salonTransactionSelect)
-        .order("transaction_date", { ascending: false })
-        .order("created_at", { ascending: false });
+      const [transactionsResult, transfersResult] = await Promise.all([
+        supabase
+          .from("pretty_salon_transactions")
+          .select(salonTransactionSelect)
+          .order("transaction_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("pretty_salon_cash_transfers")
+          .select(salonCashTransferSelect)
+          .order("transfer_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+      ]);
 
       setLoadingData(false);
 
-      if (error) {
+      if (transactionsResult.error || transfersResult.error) {
+        const error = transactionsResult.error ?? transfersResult.error;
         setLoadError(
-          `${error.message}. Ejecuta supabase/pretty_salon.sql en tu proyecto de Supabase.`
+          `${error?.message ?? "No pude cargar los datos"}. Ejecuta supabase/pretty_salon.sql en tu proyecto de Supabase.`
         );
         return false;
       }
 
       setTransactions(
-        ((data as SalonTransactionRow[] | null) ?? []).map(normalizeTransactionRow)
+        ((transactionsResult.data as SalonTransactionRow[] | null) ?? []).map(normalizeTransactionRow)
+      );
+      setCashTransfers(
+        ((transfersResult.data as SalonCashTransferRow[] | null) ?? []).map(normalizeCashTransferRow)
       );
       return true;
     },
@@ -982,6 +1182,13 @@ export default function PrettyEscritorioPage() {
     });
   }
 
+  function updateCashTransferForm<K extends keyof CashTransferFormState>(
+    field: K,
+    value: CashTransferFormState[K]
+  ) {
+    setCashTransferForm((current) => ({ ...current, [field]: value }));
+  }
+
   function openIncomeForm(paymentMethod = "Efectivo") {
     setIncomeForm((current) => ({
       ...current,
@@ -1072,6 +1279,59 @@ export default function PrettyEscritorioPage() {
     }
   }
 
+  async function addCashTransfer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!supabase || !userId) return;
+
+    const amount = Number(cashTransferForm.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert("El monto del traslado debe ser mayor que cero.");
+      return;
+    }
+
+    if (cashTransferForm.fromMethod === cashTransferForm.toMethod) {
+      alert("Elige metodos diferentes para mover el dinero.");
+      return;
+    }
+
+    const next: Omit<SalonCashTransfer, "id"> = {
+      date: cashTransferForm.date || todayISO(),
+      fromMethod: cashTransferForm.fromMethod,
+      toMethod: cashTransferForm.toMethod,
+      amount: Math.round(amount * 100) / 100,
+      notes: cashTransferForm.notes.trim(),
+    };
+
+    setSavingCashTransfer(true);
+
+    const { data, error } = await supabase
+      .from("pretty_salon_cash_transfers")
+      .insert(toCashTransferInsert(userId, next))
+      .select(salonCashTransferSelect)
+      .single();
+
+    setSavingCashTransfer(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data) {
+      setCashTransfers((current) => [
+        normalizeCashTransferRow(data as SalonCashTransferRow),
+        ...current,
+      ]);
+    } else {
+      await loadSalonData();
+    }
+
+    setCashTransferForm(defaultCashTransferForm());
+    setActiveSection("caja");
+  }
+
   async function deleteTransaction(id: string) {
     if (!supabase || !userId) return;
 
@@ -1090,6 +1350,26 @@ export default function PrettyEscritorioPage() {
     }
 
     setTransactions((current) => current.filter((item) => item.id !== id));
+  }
+
+  async function deleteCashTransfer(id: string) {
+    if (!supabase || !userId) return;
+
+    setDeletingCashTransferId(id);
+
+    const { error } = await supabase
+      .from("pretty_salon_cash_transfers")
+      .delete()
+      .eq("id", id);
+
+    setDeletingCashTransferId(null);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setCashTransfers((current) => current.filter((item) => item.id !== id));
   }
 
   function openCollectDialog(transaction: SalonTransaction) {
@@ -1160,14 +1440,32 @@ export default function PrettyEscritorioPage() {
     });
   }, [transactions]);
 
+  const sortedCashTransfers = useMemo(() => {
+    return [...cashTransfers].sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      return b.id.localeCompare(a.id);
+    });
+  }, [cashTransfers]);
+
   const monthOptions = useMemo(() => {
-    return [...new Set([selectedMonth, currentMonthISO(), ...transactions.map((item) => item.date.slice(0, 7))])]
+    return [
+      ...new Set([
+        selectedMonth,
+        currentMonthISO(),
+        ...transactions.map((item) => item.date.slice(0, 7)),
+        ...cashTransfers.map((item) => item.date.slice(0, 7)),
+      ]),
+    ]
       .sort((a, b) => b.localeCompare(a));
-  }, [selectedMonth, transactions]);
+  }, [cashTransfers, selectedMonth, transactions]);
 
   const monthlyTransactions = useMemo(() => {
     return sortedTransactions.filter((item) => item.date.startsWith(selectedMonth));
   }, [selectedMonth, sortedTransactions]);
+
+  const monthlyCashTransfers = useMemo(() => {
+    return sortedCashTransfers.filter((item) => item.date.startsWith(selectedMonth));
+  }, [selectedMonth, sortedCashTransfers]);
 
   const paidIncome = useMemo(() => {
     return sumAmounts(
@@ -1235,11 +1533,27 @@ export default function PrettyEscritorioPage() {
   );
 
   const paymentBreakdown = useMemo(() => {
-    const grouped = new Map<string, { method: string; income: number; expense: number }>();
+    const grouped = new Map<
+      string,
+      { method: string; income: number; expense: number; transferIn: number; transferOut: number }
+    >();
+
+    function getMethod(method: string) {
+      const key = method || "Otro";
+      const current = grouped.get(key) ?? {
+        method: key,
+        income: 0,
+        expense: 0,
+        transferIn: 0,
+        transferOut: 0,
+      };
+
+      grouped.set(key, current);
+      return current;
+    }
 
     for (const item of monthlyTransactions.filter((tx) => tx.status === "paid")) {
-      const method = item.paymentMethod || "Otro";
-      const current = grouped.get(method) ?? { method, income: 0, expense: 0 };
+      const current = getMethod(item.paymentMethod);
 
       if (item.kind === "income") {
         current.income += item.amount;
@@ -1247,13 +1561,25 @@ export default function PrettyEscritorioPage() {
         current.expense += item.amount;
       }
 
-      grouped.set(method, current);
+    }
+
+    for (const item of monthlyCashTransfers) {
+      getMethod(item.fromMethod).transferOut += item.amount;
+      getMethod(item.toMethod).transferIn += item.amount;
     }
 
     return [...grouped.values()]
-      .map((item) => ({ ...item, balance: item.income - item.expense }))
+      .map((item) => ({
+        ...item,
+        transferNet: item.transferIn - item.transferOut,
+        balance: item.income - item.expense + item.transferIn - item.transferOut,
+      }))
       .sort((a, b) => b.balance - a.balance);
-  }, [monthlyTransactions]);
+  }, [monthlyCashTransfers, monthlyTransactions]);
+
+  const cashTransferVolume = useMemo(() => {
+    return monthlyCashTransfers.reduce((total, item) => total + item.amount, 0);
+  }, [monthlyCashTransfers]);
 
   const clientRows = useMemo(() => {
     const grouped = new Map<
@@ -1670,69 +1996,166 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "caja" ? (
-            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                <SectionTitle
-                  label="Caja"
-                  title="Saldo por metodo de pago"
-                  description="Ingresos menos gastos pagados durante el mes seleccionado."
-                />
-                <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                  <table className="min-w-[640px] w-full text-left text-sm">
-                    <thead className="bg-[#111316] text-[#aeb5bf]">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Metodo</th>
-                        <th className="px-4 py-3 text-right font-medium">Ingresos</th>
-                        <th className="px-4 py-3 text-right font-medium">Gastos</th>
-                        <th className="px-4 py-3 text-right font-medium">Saldo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#30333a]">
-                      {paymentBreakdown.map((item) => (
-                        <tr key={item.method}>
-                          <td className="px-4 py-4 text-[#f7f9fb]">{item.method}</td>
-                          <td className="px-4 py-4 text-right text-[#71f2d8]">
-                            {money.format(item.income)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-[#ff8aa1]">
-                            {money.format(item.expense)}
-                          </td>
-                          <td className="px-4 py-4 text-right font-semibold text-[#f7f9fb]">
-                            {money.format(item.balance)}
-                          </td>
+            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+              <div className="grid min-w-0 gap-4">
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                  <SectionTitle
+                    label="Caja"
+                    title="Saldo por metodo de pago"
+                    description="Ingresos menos gastos pagados, ajustado por traslados internos del mes."
+                  />
+                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
+                    <table className="min-w-[760px] w-full text-left text-sm">
+                      <thead className="bg-[#111316] text-[#aeb5bf]">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Metodo</th>
+                          <th className="px-4 py-3 text-right font-medium">Ingresos</th>
+                          <th className="px-4 py-3 text-right font-medium">Gastos</th>
+                          <th className="px-4 py-3 text-right font-medium">Traslados</th>
+                          <th className="px-4 py-3 text-right font-medium">Saldo</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-[#30333a]">
+                        {paymentBreakdown.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-6 text-center text-[#aeb5bf]">
+                              Aun no hay movimientos de caja para este mes.
+                            </td>
+                          </tr>
+                        ) : (
+                          paymentBreakdown.map((item) => (
+                            <tr key={item.method}>
+                              <td className="px-4 py-4 text-[#f7f9fb]">{item.method}</td>
+                              <td className="px-4 py-4 text-right text-[#71f2d8]">
+                                {money.format(item.income)}
+                              </td>
+                              <td className="px-4 py-4 text-right text-[#ff8aa1]">
+                                {money.format(item.expense)}
+                              </td>
+                              <td
+                                className={[
+                                  "px-4 py-4 text-right",
+                                  item.transferNet > 0
+                                    ? "text-[#71f2d8]"
+                                    : item.transferNet < 0
+                                      ? "text-[#ff8aa1]"
+                                      : "text-[#aeb5bf]",
+                                ].join(" ")}
+                              >
+                                {formatSignedMoney(item.transferNet)}
+                              </td>
+                              <td
+                                className={[
+                                  "px-4 py-4 text-right font-semibold",
+                                  item.balance < 0 ? "text-[#ff8aa1]" : "text-[#f7f9fb]",
+                                ].join(" ")}
+                              >
+                                {money.format(item.balance)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                  <SectionTitle
+                    label="Traslados"
+                    title="Movimientos internos"
+                    description="Cambios entre metodos que no alteran ingresos, gastos ni utilidad."
+                  />
+                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
+                    <table className="min-w-[720px] w-full text-left text-sm">
+                      <thead className="bg-[#111316] text-[#aeb5bf]">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Fecha</th>
+                          <th className="px-4 py-3 font-medium">Sale de</th>
+                          <th className="px-4 py-3 font-medium">Entra a</th>
+                          <th className="px-4 py-3 text-right font-medium">Monto</th>
+                          <th className="px-4 py-3 font-medium">Notas</th>
+                          <th className="px-4 py-3 text-right font-medium">Accion</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#30333a]">
+                        {monthlyCashTransfers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-6 text-center text-[#aeb5bf]">
+                              Aun no hay traslados internos en este mes.
+                            </td>
+                          </tr>
+                        ) : (
+                          monthlyCashTransfers.map((item) => (
+                            <tr key={item.id} className="align-top">
+                              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
+                              <td className="px-4 py-4 text-[#ff8aa1]">{item.fromMethod}</td>
+                              <td className="px-4 py-4 text-[#71f2d8]">{item.toMethod}</td>
+                              <td className="px-4 py-4 text-right font-semibold text-[#f7f9fb]">
+                                {money.format(item.amount)}
+                              </td>
+                              <td className="px-4 py-4 text-[#aeb5bf]">
+                                {item.notes || "Sin notas"}
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <button
+                                  onClick={() => deleteCashTransfer(item.id)}
+                                  disabled={deletingCashTransferId === item.id}
+                                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {deletingCashTransferId === item.id ? "Eliminando..." : "Eliminar"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                <SectionTitle
-                  label="Cierre"
-                  title="Resumen de caja"
-                  description="Lo esencial para revisar antes de cerrar el dia."
-                />
-                <div className="mt-5 space-y-4 text-sm">
-                  <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
-                    <span className="text-[#aeb5bf]">Saldo real</span>
-                    <span className="font-semibold text-[#f7f9fb]">{money.format(netProfit)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
-                    <span className="text-[#aeb5bf]">Por cobrar</span>
-                    <span className="font-semibold text-[#ffe06b]">{money.format(pendingIncome)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
-                    <span className="text-[#aeb5bf]">Pagado</span>
-                    <span className="font-semibold text-[#ff8aa1]">{money.format(paidExpenses)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-[#aeb5bf]">Saldo proyectado</span>
-                    <span className="font-semibold text-[#70d6ff]">
-                      {money.format(projectedProfit)}
-                    </span>
+              <div className="grid min-w-0 gap-4">
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                  <SectionTitle
+                    label="Cierre"
+                    title="Resumen de caja"
+                    description="Lo esencial para revisar antes de cerrar el dia."
+                  />
+                  <div className="mt-5 space-y-4 text-sm">
+                    <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
+                      <span className="text-[#aeb5bf]">Saldo real</span>
+                      <span className="font-semibold text-[#f7f9fb]">{money.format(netProfit)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
+                      <span className="text-[#aeb5bf]">Por cobrar</span>
+                      <span className="font-semibold text-[#ffe06b]">{money.format(pendingIncome)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
+                      <span className="text-[#aeb5bf]">Pagado</span>
+                      <span className="font-semibold text-[#ff8aa1]">{money.format(paidExpenses)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
+                      <span className="text-[#aeb5bf]">Traslados internos</span>
+                      <span className="font-semibold text-[#70d6ff]">
+                        {money.format(cashTransferVolume)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-[#aeb5bf]">Saldo proyectado</span>
+                      <span className="font-semibold text-[#70d6ff]">
+                        {money.format(projectedProfit)}
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                <CashTransferForm
+                  form={cashTransferForm}
+                  submitting={savingCashTransfer}
+                  onChange={updateCashTransferForm}
+                  onSubmit={addCashTransfer}
+                />
               </div>
             </section>
           ) : null}

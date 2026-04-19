@@ -20,6 +20,22 @@ create index if not exists pretty_salon_transactions_owner_date_idx
 create index if not exists pretty_salon_transactions_owner_kind_idx
   on public.pretty_salon_transactions (owner_id, kind, status);
 
+create table if not exists public.pretty_salon_cash_transfers (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  transfer_date date not null,
+  from_method text not null check (from_method <> 'Credito'),
+  to_method text not null check (to_method <> 'Credito'),
+  amount numeric(12, 2) not null check (amount > 0),
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (from_method <> to_method)
+);
+
+create index if not exists pretty_salon_cash_transfers_owner_date_idx
+  on public.pretty_salon_cash_transfers (owner_id, transfer_date desc, created_at desc);
+
 create table if not exists public.pretty_salon_team_members (
   email text primary key,
   role text not null default 'member' check (role in ('owner', 'member')),
@@ -64,6 +80,7 @@ end;
 $$;
 
 alter table public.pretty_salon_transactions enable row level security;
+alter table public.pretty_salon_cash_transfers enable row level security;
 alter table public.pretty_salon_team_members enable row level security;
 
 drop policy if exists "pretty_salon_team_members_select_own"
@@ -119,6 +136,51 @@ create policy "pretty_salon_transactions_delete_own"
     or public.is_pretty_salon_team_member()
   );
 
+drop policy if exists "pretty_salon_cash_transfers_select_own"
+  on public.pretty_salon_cash_transfers;
+create policy "pretty_salon_cash_transfers_select_own"
+  on public.pretty_salon_cash_transfers
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
+
+drop policy if exists "pretty_salon_cash_transfers_insert_own"
+  on public.pretty_salon_cash_transfers;
+create policy "pretty_salon_cash_transfers_insert_own"
+  on public.pretty_salon_cash_transfers
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = owner_id);
+
+drop policy if exists "pretty_salon_cash_transfers_update_own"
+  on public.pretty_salon_cash_transfers;
+create policy "pretty_salon_cash_transfers_update_own"
+  on public.pretty_salon_cash_transfers
+  for update
+  to authenticated
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  )
+  with check (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
+
+drop policy if exists "pretty_salon_cash_transfers_delete_own"
+  on public.pretty_salon_cash_transfers;
+create policy "pretty_salon_cash_transfers_delete_own"
+  on public.pretty_salon_cash_transfers
+  for delete
+  to authenticated
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -133,5 +195,12 @@ drop trigger if exists pretty_salon_transactions_set_updated_at
   on public.pretty_salon_transactions;
 create trigger pretty_salon_transactions_set_updated_at
 before update on public.pretty_salon_transactions
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists pretty_salon_cash_transfers_set_updated_at
+  on public.pretty_salon_cash_transfers;
+create trigger pretty_salon_cash_transfers_set_updated_at
+before update on public.pretty_salon_cash_transfers
 for each row
 execute function public.set_updated_at();
