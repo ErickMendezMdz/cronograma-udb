@@ -2269,9 +2269,9 @@ export default function PrettyEscritorioPage() {
               accent="#00c2a8"
             />
             <MetricCard
-              label="Proyeccion"
-              value={money.format(projectedProfit)}
-              detail="Incluye pendientes"
+              label="Por pagar"
+              value={money.format(totalPendingExpenses)}
+              detail="Deuda pendiente"
               accent="#70d6ff"
             />
           </section>
