@@ -96,6 +96,14 @@ set status = 'pending'
 where payment_method in ('Credito', 'Tarjeta de credito')
   and status <> 'pending';
 
+alter table public.pretty_salon_expense_payments
+  drop constraint if exists pretty_salon_expense_payments_payment_method_check;
+
+alter table public.pretty_salon_expense_payments
+  add constraint pretty_salon_expense_payments_payment_method_check
+  check (payment_method in ('Efectivo', 'Cuenta Banco', 'Donacion'))
+  not valid;
+
 alter table public.pretty_salon_transactions
   drop constraint if exists pretty_salon_credit_pending_chk;
 

@@ -194,6 +194,7 @@ const expenseCategories = [
 const incomePaymentMethods = ["Efectivo", "Cuenta Banco", "Credito"] as const;
 const expensePaymentMethods = ["Efectivo", "Cuenta Banco", "Tarjeta de credito"] as const;
 const cashMovementMethods = ["Efectivo", "Cuenta Banco"] as const;
+const expenseSettlementMethods = ["Efectivo", "Cuenta Banco", "Donacion"] as const;
 const collectionPaymentMethods = cashMovementMethods;
 
 const salonTransactionSelect =
@@ -306,6 +307,10 @@ function normalizeCashMethod(paymentMethod: string | null | undefined) {
   return "Efectivo";
 }
 
+function normalizeExpenseSettlementMethod(paymentMethod: string | null | undefined) {
+  return paymentMethod === "Donacion" ? "Donacion" : normalizeCashMethod(paymentMethod);
+}
+
 function normalizePaymentMethod(kind: TransactionKind, paymentMethod: string | null | undefined) {
   if (kind === "income") {
     if (paymentMethod === "Credito" || paymentMethod === "Tarjeta de credito") return "Credito";
@@ -321,6 +326,10 @@ function normalizePaymentMethod(kind: TransactionKind, paymentMethod: string | n
 
 function isCreditPayment(paymentMethod: string) {
   return paymentMethod === "Credito" || paymentMethod === "Tarjeta de credito";
+}
+
+function isDonationPayment(paymentMethod: string) {
+  return paymentMethod === "Donacion";
 }
 
 function resolveStatusForPayment(paymentMethod: string, status: SalonStatus): SalonStatus {
@@ -446,7 +455,7 @@ function normalizeExpensePaymentRow(row: SalonExpensePaymentRow): SalonExpensePa
   return {
     id: row.id,
     date: row.payment_date,
-    paymentMethod: normalizeCashMethod(row.payment_method),
+    paymentMethod: normalizeExpenseSettlementMethod(row.payment_method),
     amount: Number(row.amount),
     notes: row.notes ?? "",
   };
@@ -493,7 +502,7 @@ function toExpensePaymentInsert(
   return {
     owner_id: ownerId,
     payment_date: item.date,
-    payment_method: normalizeCashMethod(item.paymentMethod),
+    payment_method: normalizeExpenseSettlementMethod(item.paymentMethod),
     amount: item.amount,
     notes: item.notes,
   };
@@ -501,6 +510,48 @@ function toExpensePaymentInsert(
 
 function sumAmounts(items: SalonTransaction[]) {
   return items.reduce((total, item) => total + item.amount, 0);
+}
+
+function allocateExpensePayments(
+  payments: SalonExpensePayment[],
+  transactions: SalonTransaction[]
+) {
+  const allocation = new Map<string, number>();
+  const pendingExpenseQueue = [...transactions]
+    .filter((item) => item.kind === "expense" && item.status === "pending")
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.id.localeCompare(b.id);
+    })
+    .map((item) => ({ id: item.id, remaining: item.amount }));
+
+  let expenseIndex = 0;
+
+  for (const payment of [...payments].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.id.localeCompare(b.id);
+  })) {
+    let remainingPayment = payment.amount;
+
+    while (remainingPayment > 0 && expenseIndex < pendingExpenseQueue.length) {
+      const currentExpense = pendingExpenseQueue[expenseIndex];
+      const appliedAmount = Math.min(currentExpense.remaining, remainingPayment);
+
+      allocation.set(
+        currentExpense.id,
+        (allocation.get(currentExpense.id) ?? 0) + appliedAmount
+      );
+
+      currentExpense.remaining = Math.round((currentExpense.remaining - appliedAmount) * 100) / 100;
+      remainingPayment = Math.round((remainingPayment - appliedAmount) * 100) / 100;
+
+      if (currentExpense.remaining <= 0.001) {
+        expenseIndex += 1;
+      }
+    }
+  }
+
+  return allocation;
 }
 
 function formatSignedMoney(value: number) {
@@ -637,8 +688,7 @@ function TransactionTable({
   }
 
   return (
-    <>
-      <div className="space-y-3 md:hidden">
+    <div className="grid gap-3 lg:grid-cols-2">
         {transactions.map((item) => {
           const canCollect = item.kind === "income" && item.status === "pending";
           const expensePaidAmount = item.kind === "expense" ? (expensePaidAmounts?.get(item.id) ?? 0) : 0;
@@ -650,17 +700,17 @@ function TransactionTable({
           const isDeleting = deletingId === item.id;
 
           return (
-            <article key={item.id} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+            <article key={item.id} className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-[#f7f9fb]">{item.concept}</p>
+                  <p className="break-words text-base font-semibold text-[#f7f9fb]">{item.concept}</p>
                   <p className="mt-1 text-xs text-[#aeb5bf]">
                     {formatDate(item.date)} · {item.category}
                   </p>
                 </div>
                 <p
                   className={[
-                    "shrink-0 text-right text-lg font-semibold",
+                    "shrink-0 text-right text-lg font-semibold tabular-nums",
                     item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
                   ].join(" ")}
                 >
@@ -670,11 +720,11 @@ function TransactionTable({
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-[#101113] px-3 py-2">
+                <div className="rounded-md bg-[#181a1e] px-3 py-2">
                   <p className="text-[#8f98a5]">Contacto</p>
                   <p className="mt-1 truncate text-[#d8dde3]">{item.contact || "Sin contacto"}</p>
                 </div>
-                <div className="rounded-md bg-[#101113] px-3 py-2">
+                <div className="rounded-md bg-[#181a1e] px-3 py-2">
                   <p className="text-[#8f98a5]">Metodo</p>
                   <p className="mt-1 truncate text-[#d8dde3]">{item.paymentMethod}</p>
                 </div>
@@ -741,116 +791,7 @@ function TransactionTable({
             </article>
           );
         })}
-      </div>
-
-      <div className="hidden overflow-x-auto rounded-lg border border-[#30333a] md:block">
-        <table className="min-w-[900px] w-full border-collapse text-left text-sm">
-          <thead className="bg-[#111316] text-[#aeb5bf]">
-            <tr>
-              <th className="px-4 py-3 font-medium">Fecha</th>
-              <th className="px-4 py-3 font-medium">Concepto</th>
-              <th className="px-4 py-3 font-medium">Categoria</th>
-              <th className="px-4 py-3 font-medium">Contacto</th>
-              <th className="px-4 py-3 font-medium">Metodo</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3 text-right font-medium">Monto</th>
-              <th className="px-4 py-3 text-right font-medium">Accion</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#30333a] bg-[#181a1e]">
-          {transactions.map((item) => {
-            const canCollect = item.kind === "income" && item.status === "pending";
-            const expensePaidAmount = item.kind === "expense" ? (expensePaidAmounts?.get(item.id) ?? 0) : 0;
-            const expensePendingAmount = Math.max(item.amount - expensePaidAmount, 0);
-            const canPayExpense = item.kind === "expense" && item.status === "pending" && expensePendingAmount > 0;
-            const isExpensePaid = item.kind === "expense" && item.status === "pending" && expensePendingAmount <= 0;
-            const isExpensePartial = item.kind === "expense" && expensePaidAmount > 0 && expensePendingAmount > 0;
-            const isCollecting = collectingId === item.id;
-            const isDeleting = deletingId === item.id;
-
-              return (
-                <tr key={item.id} className="align-top">
-                  <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
-                  <td className="px-4 py-4">
-                  <p className="font-medium text-[#f7f9fb]">{item.concept}</p>
-                  {isExpensePartial ? (
-                    <p className="mt-1 text-xs text-[#70d6ff]">
-                      Abonado {money.format(expensePaidAmount)} de {money.format(item.amount)}.
-                      Pendiente {money.format(expensePendingAmount)}.
-                    </p>
-                  ) : null}
-                  {item.notes ? (
-                    <p className="mt-1 whitespace-pre-line text-xs text-[#aeb5bf]">
-                      {item.notes}
-                      </p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-4 text-[#d8dde3]">{item.category}</td>
-                  <td className="px-4 py-4 text-[#d8dde3]">{item.contact || "Sin contacto"}</td>
-                  <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
-                  <td className="px-4 py-4">
-                    <span
-                      className={[
-                      "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
-                      item.status === "paid" || isExpensePaid
-                        ? "bg-[#0f3b33] text-[#71f2d8]"
-                        : isExpensePartial
-                          ? "bg-[#193347] text-[#70d6ff]"
-                          : "bg-[#403611] text-[#ffe06b]",
-                    ].join(" ")}
-                  >
-                    {isExpensePartial
-                      ? "Abonado"
-                      : isExpensePaid
-                        ? "Pagado"
-                        : getStatusLabel(item.status, item.kind)}
-                  </span>
-                </td>
-                  <td
-                    className={[
-                      "px-4 py-4 text-right font-semibold",
-                      item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
-                    ].join(" ")}
-                  >
-                    {item.kind === "income" ? "+" : "-"}
-                    {money.format(item.amount)}
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      {canCollect ? (
-                        <button
-                          onClick={() => onCollect(item)}
-                          disabled={isCollecting || isDeleting}
-                          className="rounded-md border border-[#00c2a8] px-3 py-1.5 text-xs font-semibold text-[#71f2d8] transition hover:bg-[#0f312e] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isCollecting ? "Cobrando..." : "Cobrar"}
-                      </button>
-                    ) : null}
-                    {canPayExpense ? (
-                      <button
-                        onClick={onPayExpense}
-                        disabled={isDeleting}
-                        className="rounded-md border border-[#70d6ff] px-3 py-1.5 text-xs font-semibold text-[#70d6ff] transition hover:bg-[#132936] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Abonar
-                      </button>
-                    ) : null}
-                    <button
-                      onClick={() => onDelete(item.id)}
-                        disabled={isDeleting || isCollecting}
-                        className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isDeleting ? "Eliminando..." : "Eliminar"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -1143,7 +1084,7 @@ function ExpensePaymentDialog({
         <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
           Pendiente actual:{" "}
           <span className="font-semibold text-[#ffe06b]">{money.format(pendingTotal)}</span>.
-          El abono se aplica primero a la compra mas antigua.
+          El abono se aplica primero a la compra mas antigua. Si usas Donacion, baja la deuda sin afectar caja ni gastos pagados.
         </p>
 
         <div className="mt-5 grid gap-4">
@@ -1172,13 +1113,13 @@ function ExpensePaymentDialog({
           </label>
 
           <label className="block">
-            <span className="text-sm text-[#c7ced6]">Sale de</span>
+            <span className="text-sm text-[#c7ced6]">Metodo</span>
             <select
               value={form.paymentMethod}
               onChange={(event) => onChange("paymentMethod", event.target.value)}
               className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
             >
-              {cashMovementMethods.map((method) => (
+              {expenseSettlementMethods.map((method) => (
                 <option key={method} value={method}>
                   {method}
                 </option>
@@ -1192,7 +1133,7 @@ function ExpensePaymentDialog({
               value={form.notes}
               onChange={(event) => onChange("notes", event.target.value)}
               rows={3}
-              placeholder="Ej. Abono mensual a tarjeta de credito"
+              placeholder="Ej. Abono mensual a tarjeta de credito o donacion de material"
               className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
             />
           </label>
@@ -1476,7 +1417,7 @@ export default function PrettyEscritorioPage() {
     setExpensePaymentForm((current) => ({
       ...current,
       date: current.date || todayISO(),
-      paymentMethod: normalizeCashMethod(current.paymentMethod),
+      paymentMethod: normalizeExpenseSettlementMethod(current.paymentMethod),
     }));
     setExpensePaymentDialogOpen(true);
   }
@@ -1644,7 +1585,7 @@ export default function PrettyEscritorioPage() {
 
     const next: Omit<SalonExpensePayment, "id"> = {
       date: expensePaymentForm.date || todayISO(),
-      paymentMethod: normalizeCashMethod(expensePaymentForm.paymentMethod),
+      paymentMethod: normalizeExpenseSettlementMethod(expensePaymentForm.paymentMethod),
       amount: roundedAmount,
       notes: expensePaymentForm.notes.trim(),
     };
@@ -1847,42 +1788,14 @@ export default function PrettyEscritorioPage() {
   }, [selectedMonth, sortedExpensePayments]);
 
   const expensePaymentAllocations = useMemo(() => {
-    const allocation = new Map<string, number>();
-    const pendingExpenseQueue = [...transactions]
-      .filter((item) => item.kind === "expense" && item.status === "pending")
-      .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return a.id.localeCompare(b.id);
-      })
-      .map((item) => ({ id: item.id, remaining: item.amount }));
+    return allocateExpensePayments(expensePayments, transactions);
+  }, [expensePayments, transactions]);
 
-    let expenseIndex = 0;
-
-    for (const payment of [...expensePayments].sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return a.id.localeCompare(b.id);
-    })) {
-      let remainingPayment = payment.amount;
-
-      while (remainingPayment > 0 && expenseIndex < pendingExpenseQueue.length) {
-        const currentExpense = pendingExpenseQueue[expenseIndex];
-        const appliedAmount = Math.min(currentExpense.remaining, remainingPayment);
-
-        allocation.set(
-          currentExpense.id,
-          (allocation.get(currentExpense.id) ?? 0) + appliedAmount
-        );
-
-        currentExpense.remaining = Math.round((currentExpense.remaining - appliedAmount) * 100) / 100;
-        remainingPayment = Math.round((remainingPayment - appliedAmount) * 100) / 100;
-
-        if (currentExpense.remaining <= 0.001) {
-          expenseIndex += 1;
-        }
-      }
-    }
-
-    return allocation;
+  const cashExpensePaymentAllocations = useMemo(() => {
+    return allocateExpensePayments(
+      expensePayments.filter((item) => !isDonationPayment(item.paymentMethod)),
+      transactions
+    );
   }, [expensePayments, transactions]);
 
   const paidIncome = useMemo(() => {
@@ -1901,7 +1814,9 @@ export default function PrettyEscritorioPage() {
     const paidAtPurchase = sumAmounts(
       monthlyTransactions.filter((item) => item.kind === "expense" && item.status === "paid")
     );
-    const paidByAbonos = monthlyExpensePayments.reduce((total, item) => total + item.amount, 0);
+    const paidByAbonos = monthlyExpensePayments
+      .filter((item) => !isDonationPayment(item.paymentMethod))
+      .reduce((total, item) => total + item.amount, 0);
 
     return paidAtPurchase + paidByAbonos;
   }, [monthlyExpensePayments, monthlyTransactions]);
@@ -1939,13 +1854,13 @@ export default function PrettyEscritorioPage() {
       .map((item) => {
         if (item.status === "paid") return item;
 
-        const paidAmount = Math.min(expensePaymentAllocations.get(item.id) ?? 0, item.amount);
+        const paidAmount = Math.min(cashExpensePaymentAllocations.get(item.id) ?? 0, item.amount);
         return { ...item, amount: paidAmount };
       })
       .filter((item) => item.amount > 0);
 
     return buildBreakdown(paidExpensePortions, ["#ff5f7e", "#f7d84a", "#70d6ff", "#b8f060", "#00c2a8"]);
-  }, [expensePaymentAllocations, monthlyTransactions]);
+  }, [cashExpensePaymentAllocations, monthlyTransactions]);
 
   const dailyTrend = useMemo(() => {
     return Array.from({ length: 10 }, (_, index) => {
@@ -1953,7 +1868,9 @@ export default function PrettyEscritorioPage() {
       const dayTransactions = transactions.filter(
         (item) => item.date === date && item.status === "paid"
       );
-      const dayExpensePayments = expensePayments.filter((item) => item.date === date);
+      const dayExpensePayments = expensePayments.filter(
+        (item) => item.date === date && !isDonationPayment(item.paymentMethod)
+      );
       const income = sumAmounts(dayTransactions.filter((item) => item.kind === "income"));
       const expense =
         sumAmounts(dayTransactions.filter((item) => item.kind === "expense")) +
@@ -2004,7 +1921,7 @@ export default function PrettyEscritorioPage() {
 
     }
 
-    for (const item of monthlyExpensePayments) {
+    for (const item of monthlyExpensePayments.filter((payment) => !isDonationPayment(payment.paymentMethod))) {
       getMethod(item.paymentMethod).expense += item.amount;
     }
 
@@ -2060,7 +1977,9 @@ export default function PrettyEscritorioPage() {
   const monthlyReports = useMemo(() => {
     return monthOptions.map((month) => {
       const items = transactions.filter((item) => item.date.startsWith(month));
-      const payments = expensePayments.filter((item) => item.date.startsWith(month));
+      const payments = expensePayments.filter(
+        (item) => item.date.startsWith(month) && !isDonationPayment(item.paymentMethod)
+      );
       const income = sumAmounts(
         items.filter((item) => item.kind === "income" && item.status === "paid")
       );
@@ -2387,7 +2306,7 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "ingresos" ? (
-            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]">
               <TransactionForm
                 kind="income"
                 title="Registrar ingreso"
@@ -2423,7 +2342,7 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "gastos" ? (
-            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]">
               <TransactionForm
                 kind="expense"
                 title="Registrar gasto"
@@ -2588,8 +2507,8 @@ export default function PrettyEscritorioPage() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <SectionTitle
                       label="Deuda"
-                      title="Abonos a tarjeta"
-                      description="Pagos reales aplicados a los gastos por pagar mas antiguos."
+                      title="Abonos y donaciones"
+                      description="Liquidaciones aplicadas a los gastos por pagar mas antiguos."
                     />
                     <button
                       onClick={openExpensePaymentDialog}
@@ -2604,7 +2523,7 @@ export default function PrettyEscritorioPage() {
                       <thead className="bg-[#111316] text-[#aeb5bf]">
                         <tr>
                           <th className="px-4 py-3 font-medium">Fecha</th>
-                          <th className="px-4 py-3 font-medium">Sale de</th>
+                          <th className="px-4 py-3 font-medium">Metodo</th>
                           <th className="px-4 py-3 text-right font-medium">Monto</th>
                           <th className="px-4 py-3 font-medium">Notas</th>
                           <th className="px-4 py-3 text-right font-medium">Accion</th>
@@ -2614,7 +2533,7 @@ export default function PrettyEscritorioPage() {
                         {monthlyExpensePayments.length === 0 ? (
                           <tr>
                             <td colSpan={5} className="px-4 py-6 text-center text-[#aeb5bf]">
-                              Aun no hay abonos a tarjeta en este mes.
+                              Aun no hay abonos o donaciones en este mes.
                             </td>
                           </tr>
                         ) : (
@@ -2622,11 +2541,19 @@ export default function PrettyEscritorioPage() {
                             <tr key={item.id} className="align-top">
                               <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
                               <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
-                              <td className="px-4 py-4 text-right font-semibold text-[#ff8aa1]">
+                              <td
+                                className={[
+                                  "px-4 py-4 text-right font-semibold",
+                                  isDonationPayment(item.paymentMethod) ? "text-[#70d6ff]" : "text-[#ff8aa1]",
+                                ].join(" ")}
+                              >
                                 {money.format(item.amount)}
                               </td>
                               <td className="px-4 py-4 text-[#aeb5bf]">
-                                {item.notes || "Aplicado a deuda mas antigua"}
+                                {item.notes ||
+                                  (isDonationPayment(item.paymentMethod)
+                                    ? "Donacion aplicada a deuda mas antigua"
+                                    : "Aplicado a deuda mas antigua")}
                               </td>
                               <td className="px-4 py-4 text-right">
                                 <button
