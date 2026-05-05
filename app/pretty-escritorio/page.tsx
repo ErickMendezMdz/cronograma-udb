@@ -182,8 +182,9 @@ const incomeCategories = [
 
 const expenseCategories = [
   "Insumos",
-  "Nomina",
-  "Renta",
+  "Salarios",
+  "Prestamo",
+  "Alcaldia",
   "Servicios basicos",
   "Marketing",
   "Limpieza",
