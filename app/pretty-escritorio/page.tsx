@@ -325,6 +325,16 @@ function normalizePaymentMethod(kind: TransactionKind, paymentMethod: string | n
   return normalizeCashMethod(paymentMethod);
 }
 
+function normalizeTransactionCategory(
+  kind: TransactionKind,
+  category: string | null | undefined
+) {
+  if (kind !== "expense") return category ?? "General";
+  if (category === "Nomina") return "Salarios";
+  if (category === "Renta") return "Prestamo";
+  return category ?? "General";
+}
+
 function isCreditPayment(paymentMethod: string) {
   return paymentMethod === "Credito" || paymentMethod === "Tarjeta de credito";
 }
@@ -432,7 +442,7 @@ function normalizeTransactionRow(row: SalonTransactionRow): SalonTransaction {
     kind: row.kind,
     date: row.transaction_date,
     concept: row.concept,
-    category: row.category ?? "General",
+    category: normalizeTransactionCategory(row.kind, row.category),
     amount: Number(row.amount),
     paymentMethod,
     status: resolveStatusForPayment(paymentMethod, row.status),
@@ -473,7 +483,7 @@ function toTransactionInsert(
     kind: item.kind,
     transaction_date: item.date,
     concept: item.concept,
-    category: item.category,
+    category: normalizeTransactionCategory(item.kind, item.category),
     amount: item.amount,
     payment_method: paymentMethod,
     status: resolveStatusForPayment(paymentMethod, item.status),
