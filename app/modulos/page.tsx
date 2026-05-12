@@ -134,6 +134,26 @@ export default function ModulosPage() {
                   </div>
                 </div>
               </Link>
+
+              <Link
+                href="/spotify-familiar"
+                className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-green-400/60 hover:bg-slate-900"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-green-300">
+                      Nuevo
+                    </p>
+                    <h2 className="mt-3 text-2xl font-semibold">Spotify Familiar</h2>
+                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
+                      Controla quien pago cada mes, registra abonos rapidos y mira deudas acumuladas en matriz.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-green-500/15 px-3 py-2 text-sm font-semibold text-green-200">
+                    Entrar
+                  </div>
+                </div>
+              </Link>
             </>
           ) : null}
 
