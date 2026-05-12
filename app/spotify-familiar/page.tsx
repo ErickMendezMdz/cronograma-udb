@@ -56,6 +56,14 @@ type PaymentDraft = {
   notes: string;
 };
 
+type MemberDraft = {
+  id: string;
+  name: string;
+  monthlyAmount: string;
+  startMonth: string;
+  active: boolean;
+};
+
 const money = new Intl.NumberFormat("es-SV", {
   style: "currency",
   currency: "USD",
@@ -141,11 +149,12 @@ function getMonthStatus(
   month: string,
   paymentsByMonth: Map<string, SpotifyPayment>
 ) {
-  if (month < member.startMonth || !member.active) return "inactive";
+  if (month < member.startMonth) return "inactive";
 
   const paid = getPaidAmount(paymentsByMonth, member.id, month);
   if (paid >= member.monthlyAmount) return "paid";
   if (paid > 0) return "partial";
+  if (!member.active) return "inactive";
   if (month > currentMonthISO()) return "future";
   return "pending";
 }
@@ -172,6 +181,10 @@ function getMemberDebt(
   paymentsByMonth: Map<string, SpotifyPayment>,
   throughMonth = currentMonthISO()
 ) {
+  if (!member.active) {
+    return { total: 0, pendingMonths: [] };
+  }
+
   let total = 0;
   const pendingMonths: string[] = [];
   let month = member.startMonth;
@@ -223,6 +236,7 @@ export default function SpotifyFamiliarPage() {
   const [savingPaymentFor, setSavingPaymentFor] = useState<string | null>(null);
   const [savingMember, setSavingMember] = useState(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [deletingMemberId, setDeletingMemberId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [members, setMembers] = useState<SpotifyMember[]>([]);
@@ -231,6 +245,8 @@ export default function SpotifyFamiliarPage() {
   const [newMemberAmount, setNewMemberAmount] = useState("2");
   const [newMemberStartMonth, setNewMemberStartMonth] = useState(currentMonthISO);
   const [paymentDraft, setPaymentDraft] = useState<PaymentDraft | null>(null);
+  const [memberDraft, setMemberDraft] = useState<MemberDraft | null>(null);
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
 
   const sortedMembers = useMemo(() => {
     return [...members].sort((a, b) => {
@@ -258,27 +274,21 @@ export default function SpotifyFamiliarPage() {
   }, [payments]);
 
   const matrixMonths = useMemo(() => {
-    const start = addMonths(currentMonthISO(), -5);
-    return Array.from({ length: 12 }, (_, index) => addMonths(start, index));
-  }, []);
+    return Array.from({ length: 12 }, (_, index) => `${selectedYear}-${pad(index + 1)}`);
+  }, [selectedYear]);
 
-  const dashboard = useMemo(() => {
-    const activeMembers = members.filter((item) => item.active);
-    const expected = activeMembers.reduce((sum, item) => sum + item.monthlyAmount, 0);
-    const currentCollected = activeMembers.reduce(
-      (sum, item) => sum + Math.min(getPaidAmount(paymentsByMonth, item.id, currentMonthISO()), item.monthlyAmount),
-      0
-    );
-    const totalDebt = activeMembers.reduce(
-      (sum, item) => sum + getMemberDebt(item, paymentsByMonth).total,
-      0
-    );
-    const peopleWithDebt = activeMembers.filter(
-      (item) => getMemberDebt(item, paymentsByMonth).total > 0
-    ).length;
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = new Set<string>([
+      String(currentYear - 1),
+      String(currentYear),
+      String(currentYear + 1),
+      ...members.map((item) => item.startMonth.slice(0, 4)),
+      ...payments.map((item) => item.billingMonth.slice(0, 4)),
+    ]);
 
-    return { expected, currentCollected, totalDebt, peopleWithDebt };
-  }, [members, paymentsByMonth]);
+    return [...years].sort((a, b) => Number(b) - Number(a));
+  }, [members, payments]);
 
   async function loadSpotifyData(currentUserId: string) {
     if (!supabase) return;
@@ -350,31 +360,6 @@ export default function SpotifyFamiliarPage() {
     router.replace("/login");
   }
 
-  async function seedMembers() {
-    if (!supabase || !userId) return;
-
-    setSavingMember(true);
-
-    const { error } = await supabase.from("spotify_family_members").insert(
-      Array.from({ length: 4 }, (_, index) => ({
-        owner_id: userId,
-        name: `Persona ${index + 1}`,
-        monthly_amount: 2,
-        start_month: currentMonthISO(),
-        display_order: index,
-      }))
-    );
-
-    setSavingMember(false);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await loadSpotifyData(userId);
-  }
-
   async function addMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || !userId) return;
@@ -420,6 +405,16 @@ export default function SpotifyFamiliarPage() {
       paymentDate: todayISO(),
       paymentMethod: "Cuenta Banco",
       notes: "",
+    });
+  }
+
+  function openMemberDraft(member: SpotifyMember) {
+    setMemberDraft({
+      id: member.id,
+      name: member.name,
+      monthlyAmount: String(member.monthlyAmount),
+      startMonth: member.startMonth,
+      active: member.active,
     });
   }
 
@@ -501,6 +496,73 @@ export default function SpotifyFamiliarPage() {
     await loadSpotifyData(userId);
   }
 
+  async function updateMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !userId || !memberDraft) return;
+
+    const monthlyAmount = Math.round(Number(memberDraft.monthlyAmount) * 100) / 100;
+
+    if (!memberDraft.name.trim()) {
+      alert("Escribe el nombre de la persona.");
+      return;
+    }
+
+    if (!Number.isFinite(monthlyAmount) || monthlyAmount <= 0) {
+      alert("El monto mensual debe ser mayor que cero.");
+      return;
+    }
+
+    setSavingMember(true);
+
+    const { error } = await supabase
+      .from("spotify_family_members")
+      .update({
+        name: memberDraft.name.trim(),
+        monthly_amount: monthlyAmount,
+        start_month: memberDraft.startMonth,
+        active: memberDraft.active,
+      })
+      .eq("id", memberDraft.id)
+      .eq("owner_id", userId);
+
+    setSavingMember(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setMemberDraft(null);
+    await loadSpotifyData(userId);
+  }
+
+  async function deleteMember(member: SpotifyMember) {
+    if (!supabase || !userId) return;
+
+    const confirmed = window.confirm(
+      `Eliminar a ${member.name}? Tambien se eliminaran sus pagos registrados.`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingMemberId(member.id);
+
+    const { error } = await supabase
+      .from("spotify_family_members")
+      .delete()
+      .eq("id", member.id)
+      .eq("owner_id", userId);
+
+    setDeletingMemberId(null);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadSpotifyData(userId);
+  }
+
   if (checking) {
     return <div className="flex min-h-screen items-center justify-center text-slate-300">Cargando...</div>;
   }
@@ -557,25 +619,55 @@ export default function SpotifyFamiliarPage() {
           </div>
         ) : null}
 
-        <section className="mt-6 grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Cobrado este mes</p>
-            <p className="mt-4 text-3xl font-semibold text-emerald-100">
-              {money.format(dashboard.currentCollected)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Esperado mensual</p>
-            <p className="mt-4 text-3xl font-semibold">{money.format(dashboard.expected)}</p>
-          </div>
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-300">Pendiente total</p>
-            <p className="mt-4 text-3xl font-semibold text-red-100">{money.format(dashboard.totalDebt)}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">Personas pendientes</p>
-            <p className="mt-4 text-3xl font-semibold text-amber-100">{dashboard.peopleWithDebt}</p>
-          </div>
+        <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {sortedMembers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950 p-5 text-sm text-slate-400 sm:col-span-2 xl:col-span-4">
+              Agrega las personas reales para ver aqui quien debe y quien va al dia.
+            </div>
+          ) : (
+            sortedMembers.map((member) => {
+              const debt = getMemberDebt(member, paymentsByMonth);
+              const nextMonth = findFirstPaymentMonth(member, paymentsByMonth);
+              const isUpToDate = debt.total <= 0;
+
+              return (
+                <article
+                  key={member.id}
+                  className={[
+                    "rounded-2xl border p-5",
+                    isUpToDate
+                      ? "border-emerald-500/30 bg-emerald-500/10"
+                      : "border-red-500/30 bg-red-500/10",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-lg font-semibold text-slate-100">{member.name}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {money.format(member.monthlyAmount)} mensual
+                      </p>
+                    </div>
+                    <span
+                      className={[
+                        "shrink-0 rounded-lg px-2 py-1 text-xs font-semibold",
+                        isUpToDate ? "bg-emerald-500/15 text-emerald-200" : "bg-red-500/15 text-red-200",
+                      ].join(" ")}
+                    >
+                      {isUpToDate ? "Al dia" : "Debe"}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-3xl font-semibold">
+                    {isUpToDate ? "Va al dia" : money.format(debt.total)}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {isUpToDate
+                      ? `Siguiente pago: ${formatMonth(nextMonth)}`
+                      : `Pendiente: ${debt.pendingMonths.map(formatMonth).join(", ")}`}
+                  </p>
+                </article>
+              );
+            })
+          )}
         </section>
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -584,120 +676,133 @@ export default function SpotifyFamiliarPage() {
               <p className="text-sm font-semibold text-green-400">Matriz</p>
               <h2 className="mt-1 text-2xl font-semibold">Pagos por mes</h2>
             </div>
-            {members.length === 0 ? (
-              <button
-                onClick={seedMembers}
-                disabled={savingMember}
-                className="rounded-xl bg-green-500 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
+            <label className="block">
+              <span className="text-sm text-slate-400">Ano</span>
+              <select
+                value={selectedYear}
+                onChange={(event) => setSelectedYear(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 outline-none focus:border-green-400 sm:w-40"
               >
-                {savingMember ? "Creando..." : "Crear 4 personas base"}
-              </button>
-            ) : null}
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-800">
-            <table className="min-w-[980px] w-full border-collapse text-left text-sm">
-              <thead className="bg-slate-900 text-slate-400">
-                <tr>
-                  <th className="sticky left-0 z-10 bg-slate-900 px-4 py-3 font-medium">Persona</th>
-                  {matrixMonths.map((month) => (
-                    <th key={month} className="px-3 py-3 text-center font-medium">
-                      {formatMonth(month)}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-right font-medium">Accion</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {sortedMembers.length === 0 ? (
-                  <tr>
-                    <td colSpan={14} className="px-4 py-8 text-center text-slate-400">
-                      Crea las 4 personas base o agrega una persona manualmente.
-                    </td>
-                  </tr>
-                ) : (
-                  sortedMembers.map((member) => {
-                    const debt = getMemberDebt(member, paymentsByMonth);
-                    const nextMonth = findFirstPaymentMonth(member, paymentsByMonth);
+          <div className="mt-5 grid gap-4">
+            {sortedMembers.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-5 text-sm text-slate-400">
+                Agrega una persona para empezar a registrar pagos.
+              </div>
+            ) : (
+              sortedMembers.map((member) => {
+                const debt = getMemberDebt(member, paymentsByMonth);
+                const nextMonth = findFirstPaymentMonth(member, paymentsByMonth);
 
-                    return (
-                      <tr key={member.id} className="align-top">
-                        <td className="sticky left-0 z-10 bg-slate-950 px-4 py-4">
-                          <p className="font-semibold text-slate-100">{member.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {money.format(member.monthlyAmount)} desde {formatMonth(member.startMonth)}
+                return (
+                  <article key={member.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-xl font-semibold text-slate-100">{member.name}</h3>
+                          {!member.active ? (
+                            <span className="rounded-lg bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-400">
+                              Inactiva
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {money.format(member.monthlyAmount)} mensual desde {formatMonth(member.startMonth)}
+                        </p>
+                        {debt.pendingMonths.length > 0 ? (
+                          <p className="mt-2 text-sm text-red-300">
+                            Debe {money.format(debt.total)}: {debt.pendingMonths.map(formatMonth).join(", ")}
                           </p>
-                          {debt.pendingMonths.length > 0 ? (
-                            <p className="mt-2 text-xs text-red-300">
-                              Debe {debt.pendingMonths.map(formatMonth).join(", ")}
-                            </p>
-                          ) : (
-                            <p className="mt-2 text-xs text-emerald-300">Al dia</p>
-                          )}
-                        </td>
-                        {matrixMonths.map((month) => {
-                          const status = getMonthStatus(member, month, paymentsByMonth);
-                          const paid = getPaidAmount(paymentsByMonth, member.id, month);
-                          const classes =
-                            status === "paid"
-                              ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-100"
-                              : status === "partial"
-                                ? "border-amber-500/40 bg-amber-500/20 text-amber-100"
-                                : status === "pending"
-                                  ? "border-red-500/40 bg-red-500/20 text-red-100"
-                                  : "border-slate-800 bg-slate-900 text-slate-500";
+                        ) : (
+                          <p className="mt-2 text-sm text-emerald-300">Va al dia</p>
+                        )}
+                      </div>
 
-                          return (
-                            <td key={month} className="px-2 py-3 text-center">
-                              <div className={["mx-auto min-h-14 rounded-lg border px-2 py-2", classes].join(" ")}>
-                                <p className="text-xs font-semibold">
-                                  {status === "paid"
-                                    ? "Pagado"
-                                    : status === "partial"
-                                      ? "Parcial"
-                                      : status === "pending"
-                                        ? "Pendiente"
-                                        : month > currentMonthISO()
-                                          ? "Futuro"
-                                          : "N/A"}
-                                </p>
-                                {paid > 0 ? <p className="mt-1 text-xs">{money.format(paid)}</p> : null}
-                              </div>
-                            </td>
-                          );
-                        })}
-                        <td className="px-4 py-4 text-right">
-                          <div className="flex flex-col gap-2">
-                            <button
-                              onClick={() => quickPay(member)}
-                              disabled={savingPaymentFor === member.id}
-                              className="rounded-xl bg-green-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
-                            >
-                              {savingPaymentFor === member.id
-                                ? "Guardando..."
-                                : `Confirmar ${money.format(member.monthlyAmount)}`}
-                            </button>
-                            <button
-                              onClick={() => openPaymentDraft(member, 2)}
-                              className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-                            >
-                              +2 meses
-                            </button>
-                            <button
-                              onClick={() => openPaymentDraft(member)}
-                              className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-                            >
-                              Modificar
-                            </button>
-                            <p className="text-xs text-slate-500">Sigue: {formatMonth(nextMonth)}</p>
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                        <button
+                          onClick={() => quickPay(member)}
+                          disabled={savingPaymentFor === member.id || !member.active}
+                          className="rounded-xl bg-green-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+                        >
+                          {savingPaymentFor === member.id
+                            ? "Guardando..."
+                            : `Confirmar ${money.format(member.monthlyAmount)}`}
+                        </button>
+                        <button
+                          onClick={() => openPaymentDraft(member, 2)}
+                          disabled={!member.active}
+                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          +2 meses
+                        </button>
+                        <button
+                          onClick={() => openPaymentDraft(member)}
+                          disabled={!member.active}
+                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          Modificar pago
+                        </button>
+                        <button
+                          onClick={() => openMemberDraft(member)}
+                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                        >
+                          Editar persona
+                        </button>
+                        <button
+                          onClick={() => deleteMember(member)}
+                          disabled={deletingMemberId === member.id}
+                          className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-60 sm:col-span-2"
+                        >
+                          {deletingMemberId === member.id ? "Eliminando..." : "Eliminar"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12">
+                      {matrixMonths.map((month) => {
+                        const status = getMonthStatus(member, month, paymentsByMonth);
+                        const paid = getPaidAmount(paymentsByMonth, member.id, month);
+                        const classes =
+                          status === "paid"
+                            ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-100"
+                            : status === "partial"
+                              ? "border-amber-500/40 bg-amber-500/20 text-amber-100"
+                              : status === "pending"
+                                ? "border-red-500/40 bg-red-500/20 text-red-100"
+                                : "border-slate-800 bg-slate-950 text-slate-500";
+
+                        return (
+                          <div key={month} className={["min-h-20 rounded-xl border p-2 text-center", classes].join(" ")}>
+                            <p className="text-xs font-semibold capitalize">{formatMonth(month)}</p>
+                            <p className="mt-2 text-xs font-semibold">
+                              {status === "paid"
+                                ? "Pagado"
+                                : status === "partial"
+                                  ? "Parcial"
+                                  : status === "pending"
+                                    ? "Pendiente"
+                                    : month > currentMonthISO()
+                                      ? "Futuro"
+                                      : "N/A"}
+                            </p>
+                            {paid > 0 ? <p className="mt-1 text-xs">{money.format(paid)}</p> : null}
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500">Siguiente aplicacion automatica: {formatMonth(nextMonth)}</p>
+                  </article>
+                );
+              })
+            )}
           </div>
         </section>
 
@@ -892,6 +997,83 @@ export default function SpotifyFamiliarPage() {
                 type="button"
                 onClick={() => setPaymentDraft(null)}
                 disabled={savingPaymentFor === paymentDraft.memberId}
+                className="rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {memberDraft ? (
+        <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
+          <form
+            onSubmit={updateMember}
+            className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950 p-5 shadow-2xl shadow-black/40"
+          >
+            <p className="text-sm font-semibold text-green-400">Persona</p>
+            <h2 className="mt-1 text-2xl font-semibold">Editar datos</h2>
+            <div className="mt-5 grid gap-4">
+              <label className="block">
+                <span className="text-sm text-slate-400">Nombre</span>
+                <input
+                  value={memberDraft.name}
+                  onChange={(event) => setMemberDraft((current) => current ? { ...current, name: event.target.value } : current)}
+                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-slate-100 outline-none focus:border-green-400"
+                />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm text-slate-400">Monto mensual</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={memberDraft.monthlyAmount}
+                    onChange={(event) => setMemberDraft((current) => current ? { ...current, monthlyAmount: event.target.value } : current)}
+                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-slate-100 outline-none focus:border-green-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm text-slate-400">Empieza en</span>
+                  <input
+                    type="month"
+                    value={memberDraft.startMonth}
+                    onChange={(event) => setMemberDraft((current) => current ? { ...current, startMonth: event.target.value } : current)}
+                    className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-slate-100 outline-none focus:border-green-400"
+                  />
+                </label>
+              </div>
+              <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900 p-3">
+                <span>
+                  <span className="block text-sm font-semibold text-slate-100">Persona activa</span>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    Si se va, puedes desactivarla para conservar historial.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={memberDraft.active}
+                  onChange={(event) => setMemberDraft((current) => current ? { ...current, active: event.target.checked } : current)}
+                  className="h-5 w-5 accent-green-500"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="submit"
+                disabled={savingMember}
+                className="rounded-xl bg-green-500 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60"
+              >
+                {savingMember ? "Guardando..." : "Guardar cambios"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberDraft(null)}
+                disabled={savingMember}
                 className="rounded-xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
               >
                 Cancelar
