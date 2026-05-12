@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -227,6 +227,7 @@ function buildPaymentApplications(
 
 export default function SpotifyFamiliarPage() {
   const router = useRouter();
+  const memberMatrixRefs = useRef(new Map<string, HTMLElement>());
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const configError = useMemo(() => getSupabaseConfigError(), []);
 
@@ -289,6 +290,13 @@ export default function SpotifyFamiliarPage() {
 
     return [...years].sort((a, b) => Number(b) - Number(a));
   }, [members, payments]);
+
+  function scrollToMemberMatrix(memberId: string) {
+    memberMatrixRefs.current.get(memberId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   async function loadSpotifyData(currentUserId: string) {
     if (!supabase) return;
@@ -631,10 +639,12 @@ export default function SpotifyFamiliarPage() {
               const isUpToDate = debt.total <= 0;
 
               return (
-                <article
+                <button
+                  type="button"
                   key={member.id}
+                  onClick={() => scrollToMemberMatrix(member.id)}
                   className={[
-                    "rounded-2xl border p-5",
+                    "rounded-2xl border p-5 text-left transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-400",
                     isUpToDate
                       ? "border-emerald-500/30 bg-emerald-500/10"
                       : "border-red-500/30 bg-red-500/10",
@@ -664,7 +674,8 @@ export default function SpotifyFamiliarPage() {
                       ? `Siguiente pago: ${formatMonth(nextMonth)}`
                       : `Pendiente: ${debt.pendingMonths.map(formatMonth).join(", ")}`}
                   </p>
-                </article>
+                  <p className="mt-4 text-xs font-semibold text-green-300">Ver matriz</p>
+                </button>
               );
             })
           )}
@@ -703,7 +714,17 @@ export default function SpotifyFamiliarPage() {
                 const nextMonth = findFirstPaymentMonth(member, paymentsByMonth);
 
                 return (
-                  <article key={member.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <article
+                    key={member.id}
+                    ref={(node) => {
+                      if (node) {
+                        memberMatrixRefs.current.set(member.id, node);
+                      } else {
+                        memberMatrixRefs.current.delete(member.id);
+                      }
+                    }}
+                    className="scroll-mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4"
+                  >
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
