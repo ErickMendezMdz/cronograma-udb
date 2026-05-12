@@ -50,6 +50,22 @@ create table if not exists public.pretty_salon_expense_payments (
 create index if not exists pretty_salon_expense_payments_owner_date_idx
   on public.pretty_salon_expense_payments (owner_id, payment_date desc, created_at desc);
 
+create table if not exists public.pretty_salon_loan_movements (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users (id) on delete cascade,
+  movement_date date not null,
+  movement_type text not null check (movement_type in ('borrow', 'repay')),
+  borrower text not null default '',
+  payment_method text not null check (payment_method in ('Efectivo', 'Cuenta Banco')),
+  amount numeric(12, 2) not null check (amount > 0),
+  notes text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists pretty_salon_loan_movements_owner_date_idx
+  on public.pretty_salon_loan_movements (owner_id, movement_date desc, created_at desc);
+
 create table if not exists public.pretty_salon_team_members (
   email text primary key,
   role text not null default 'member' check (role in ('owner', 'member')),
@@ -134,6 +150,7 @@ $$;
 alter table public.pretty_salon_transactions enable row level security;
 alter table public.pretty_salon_cash_transfers enable row level security;
 alter table public.pretty_salon_expense_payments enable row level security;
+alter table public.pretty_salon_loan_movements enable row level security;
 alter table public.pretty_salon_team_members enable row level security;
 
 drop policy if exists "pretty_salon_team_members_select_own"
@@ -279,6 +296,51 @@ create policy "pretty_salon_expense_payments_delete_own"
     or public.is_pretty_salon_team_member()
   );
 
+drop policy if exists "pretty_salon_loan_movements_select_own"
+  on public.pretty_salon_loan_movements;
+create policy "pretty_salon_loan_movements_select_own"
+  on public.pretty_salon_loan_movements
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
+
+drop policy if exists "pretty_salon_loan_movements_insert_own"
+  on public.pretty_salon_loan_movements;
+create policy "pretty_salon_loan_movements_insert_own"
+  on public.pretty_salon_loan_movements
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = owner_id);
+
+drop policy if exists "pretty_salon_loan_movements_update_own"
+  on public.pretty_salon_loan_movements;
+create policy "pretty_salon_loan_movements_update_own"
+  on public.pretty_salon_loan_movements
+  for update
+  to authenticated
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  )
+  with check (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
+
+drop policy if exists "pretty_salon_loan_movements_delete_own"
+  on public.pretty_salon_loan_movements;
+create policy "pretty_salon_loan_movements_delete_own"
+  on public.pretty_salon_loan_movements
+  for delete
+  to authenticated
+  using (
+    (select auth.uid()) = owner_id
+    or public.is_pretty_salon_team_member()
+  );
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -307,5 +369,12 @@ drop trigger if exists pretty_salon_expense_payments_set_updated_at
   on public.pretty_salon_expense_payments;
 create trigger pretty_salon_expense_payments_set_updated_at
 before update on public.pretty_salon_expense_payments
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists pretty_salon_loan_movements_set_updated_at
+  on public.pretty_salon_loan_movements;
+create trigger pretty_salon_loan_movements_set_updated_at
+before update on public.pretty_salon_loan_movements
 for each row
 execute function public.set_updated_at();

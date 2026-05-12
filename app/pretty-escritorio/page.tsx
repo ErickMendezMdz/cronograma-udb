@@ -19,6 +19,7 @@ type SectionId =
 
 type TransactionKind = "income" | "expense";
 type SalonStatus = "paid" | "pending";
+type LoanMovementType = "borrow" | "repay";
 
 type SalonTransaction = {
   id: string;
@@ -116,6 +117,38 @@ type SalonExpensePaymentInsert = {
   notes: string;
 };
 
+type SalonLoanMovement = {
+  id: string;
+  date: string;
+  movementType: LoanMovementType;
+  borrower: string;
+  paymentMethod: string;
+  amount: number;
+  notes: string;
+};
+
+type SalonLoanMovementRow = {
+  id: string;
+  owner_id: string;
+  movement_date: string;
+  movement_type: LoanMovementType;
+  borrower: string | null;
+  payment_method: string;
+  amount: number | string;
+  notes: string | null;
+  created_at: string;
+};
+
+type SalonLoanMovementInsert = {
+  owner_id: string;
+  movement_date: string;
+  movement_type: LoanMovementType;
+  borrower: string;
+  payment_method: string;
+  amount: number;
+  notes: string;
+};
+
 type TransactionFormState = {
   date: string;
   concept: string;
@@ -137,6 +170,15 @@ type CashTransferFormState = {
 
 type ExpensePaymentFormState = {
   date: string;
+  amount: string;
+  paymentMethod: string;
+  notes: string;
+};
+
+type LoanMovementFormState = {
+  date: string;
+  movementType: LoanMovementType;
+  borrower: string;
   amount: string;
   paymentMethod: string;
   notes: string;
@@ -204,6 +246,8 @@ const salonCashTransferSelect =
   "id, owner_id, transfer_date, from_method, to_method, amount, notes, created_at";
 const salonExpensePaymentSelect =
   "id, owner_id, payment_date, payment_method, amount, notes, created_at";
+const salonLoanMovementSelect =
+  "id, owner_id, movement_date, movement_type, borrower, payment_method, amount, notes, created_at";
 
 const serviceCatalog = [
   {
@@ -396,6 +440,17 @@ function defaultExpensePaymentForm(): ExpensePaymentFormState {
   };
 }
 
+function defaultLoanMovementForm(): LoanMovementFormState {
+  return {
+    date: todayISO(),
+    movementType: "borrow",
+    borrower: "Erick",
+    amount: "",
+    paymentMethod: "Efectivo",
+    notes: "",
+  };
+}
+
 function isSalonTransaction(item: unknown): item is SalonTransaction {
   if (!item || typeof item !== "object") return false;
 
@@ -472,6 +527,18 @@ function normalizeExpensePaymentRow(row: SalonExpensePaymentRow): SalonExpensePa
   };
 }
 
+function normalizeLoanMovementRow(row: SalonLoanMovementRow): SalonLoanMovement {
+  return {
+    id: row.id,
+    date: row.movement_date,
+    movementType: row.movement_type === "repay" ? "repay" : "borrow",
+    borrower: row.borrower ?? "",
+    paymentMethod: normalizeCashMethod(row.payment_method),
+    amount: Number(row.amount),
+    notes: row.notes ?? "",
+  };
+}
+
 function toTransactionInsert(
   ownerId: string,
   item: Omit<SalonTransaction, "id">
@@ -514,6 +581,21 @@ function toExpensePaymentInsert(
     owner_id: ownerId,
     payment_date: item.date,
     payment_method: normalizeExpenseSettlementMethod(item.paymentMethod),
+    amount: item.amount,
+    notes: item.notes,
+  };
+}
+
+function toLoanMovementInsert(
+  ownerId: string,
+  item: Omit<SalonLoanMovement, "id">
+): SalonLoanMovementInsert {
+  return {
+    owner_id: ownerId,
+    movement_date: item.date,
+    movement_type: item.movementType,
+    borrower: item.borrower,
+    payment_method: normalizeCashMethod(item.paymentMethod),
     amount: item.amount,
     notes: item.notes,
   };
@@ -1066,6 +1148,116 @@ function CashTransferForm({
   );
 }
 
+function LoanMovementForm({
+  form,
+  submitting,
+  onChange,
+  onSubmit,
+}: {
+  form: LoanMovementFormState;
+  submitting?: boolean;
+  onChange: <K extends keyof LoanMovementFormState>(
+    field: K,
+    value: LoanMovementFormState[K]
+  ) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+      <h3 className="text-xl font-semibold text-[#f7f9fb]">Prestado</h3>
+      <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
+        Registra dinero tomado temporalmente o repuesto. Solo ajusta efectivo o cuenta banco.
+      </p>
+
+      <div className="mt-5 grid gap-4">
+        <label className="block">
+          <span className="text-sm text-[#c7ced6]">Movimiento</span>
+          <select
+            value={form.movementType}
+            onChange={(event) => onChange("movementType", event.target.value as LoanMovementType)}
+            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+          >
+            <option value="borrow">Prestado</option>
+            <option value="repay">Reposicion</option>
+          </select>
+        </label>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Quien</span>
+            <input
+              value={form.borrower}
+              onChange={(event) => onChange("borrower", event.target.value)}
+              placeholder="Erick o esposa"
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Monto</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={form.amount}
+              onChange={(event) => onChange("amount", event.target.value)}
+              placeholder="0.00"
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Metodo</span>
+            <select
+              value={form.paymentMethod}
+              onChange={(event) => onChange("paymentMethod", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            >
+              {cashMovementMethods.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-[#c7ced6]">Fecha</span>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(event) => onChange("date", event.target.value)}
+              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+            />
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="text-sm text-[#c7ced6]">Notas</span>
+          <textarea
+            value={form.notes}
+            onChange={(event) => onChange("notes", event.target.value)}
+            rows={3}
+            placeholder="Ej. Retiro personal temporal"
+            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
+          />
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-4 text-base font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60 sm:py-3 sm:text-sm"
+      >
+        {submitting ? "Guardando..." : "Guardar prestado"}
+      </button>
+    </form>
+  );
+}
+
 function ExpensePaymentDialog({
   form,
   pendingTotal,
@@ -1185,9 +1377,11 @@ export default function PrettyEscritorioPage() {
   const [savingKind, setSavingKind] = useState<TransactionKind | null>(null);
   const [savingCashTransfer, setSavingCashTransfer] = useState(false);
   const [savingExpensePayment, setSavingExpensePayment] = useState(false);
+  const [savingLoanMovement, setSavingLoanMovement] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingCashTransferId, setDeletingCashTransferId] = useState<string | null>(null);
   const [deletingExpensePaymentId, setDeletingExpensePaymentId] = useState<string | null>(null);
+  const [deletingLoanMovementId, setDeletingLoanMovementId] = useState<string | null>(null);
   const [collectingId, setCollectingId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
@@ -1196,6 +1390,7 @@ export default function PrettyEscritorioPage() {
   const [transactions, setTransactions] = useState<SalonTransaction[]>([]);
   const [cashTransfers, setCashTransfers] = useState<SalonCashTransfer[]>([]);
   const [expensePayments, setExpensePayments] = useState<SalonExpensePayment[]>([]);
+  const [loanMovements, setLoanMovements] = useState<SalonLoanMovement[]>([]);
   const [incomeForm, setIncomeForm] = useState<TransactionFormState>(defaultIncomeForm);
   const [expenseForm, setExpenseForm] = useState<TransactionFormState>(defaultExpenseForm);
   const [cashTransferForm, setCashTransferForm] = useState<CashTransferFormState>(
@@ -1203,6 +1398,9 @@ export default function PrettyEscritorioPage() {
   );
   const [expensePaymentForm, setExpensePaymentForm] = useState<ExpensePaymentFormState>(
     defaultExpensePaymentForm
+  );
+  const [loanMovementForm, setLoanMovementForm] = useState<LoanMovementFormState>(
+    defaultLoanMovementForm
   );
   const [expensePaymentDialogOpen, setExpensePaymentDialogOpen] = useState(false);
   const [collectionTarget, setCollectionTarget] = useState<SalonTransaction | null>(null);
@@ -1215,7 +1413,12 @@ export default function PrettyEscritorioPage() {
       setLoadingData(true);
       setLoadError(null);
 
-      const [transactionsResult, transfersResult, expensePaymentsResult] = await Promise.all([
+      const [
+        transactionsResult,
+        transfersResult,
+        expensePaymentsResult,
+        loanMovementsResult,
+      ] = await Promise.all([
         supabase
           .from("pretty_salon_transactions")
           .select(salonTransactionSelect)
@@ -1231,13 +1434,26 @@ export default function PrettyEscritorioPage() {
           .select(salonExpensePaymentSelect)
           .order("payment_date", { ascending: false })
           .order("created_at", { ascending: false }),
+        supabase
+          .from("pretty_salon_loan_movements")
+          .select(salonLoanMovementSelect)
+          .order("movement_date", { ascending: false })
+          .order("created_at", { ascending: false }),
       ]);
 
       setLoadingData(false);
 
-      if (transactionsResult.error || transfersResult.error || expensePaymentsResult.error) {
+      if (
+        transactionsResult.error ||
+        transfersResult.error ||
+        expensePaymentsResult.error ||
+        loanMovementsResult.error
+      ) {
         const error =
-          transactionsResult.error ?? transfersResult.error ?? expensePaymentsResult.error;
+          transactionsResult.error ??
+          transfersResult.error ??
+          expensePaymentsResult.error ??
+          loanMovementsResult.error;
         setLoadError(
           `${error?.message ?? "No pude cargar los datos"}. Ejecuta supabase/pretty_salon.sql en tu proyecto de Supabase.`
         );
@@ -1253,6 +1469,11 @@ export default function PrettyEscritorioPage() {
       setExpensePayments(
         ((expensePaymentsResult.data as SalonExpensePaymentRow[] | null) ?? []).map(
           normalizeExpensePaymentRow
+        )
+      );
+      setLoanMovements(
+        ((loanMovementsResult.data as SalonLoanMovementRow[] | null) ?? []).map(
+          normalizeLoanMovementRow
         )
       );
       return true;
@@ -1422,6 +1643,13 @@ export default function PrettyEscritorioPage() {
     value: ExpensePaymentFormState[K]
   ) {
     setExpensePaymentForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateLoanMovementForm<K extends keyof LoanMovementFormState>(
+    field: K,
+    value: LoanMovementFormState[K]
+  ) {
+    setLoanMovementForm((current) => ({ ...current, [field]: value }));
   }
 
   function openExpensePaymentDialog() {
@@ -1630,6 +1858,61 @@ export default function PrettyEscritorioPage() {
     setActiveSection("caja");
   }
 
+  async function addLoanMovement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!supabase || !userId) return;
+
+    const amount = Number(loanMovementForm.amount);
+    const roundedAmount = Math.round(amount * 100) / 100;
+
+    if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) {
+      alert("El monto prestado debe ser mayor que cero.");
+      return;
+    }
+
+    if (!loanMovementForm.borrower.trim()) {
+      alert("Agrega quien tomo o repuso el dinero.");
+      return;
+    }
+
+    const next: Omit<SalonLoanMovement, "id"> = {
+      date: loanMovementForm.date || todayISO(),
+      movementType: loanMovementForm.movementType,
+      borrower: loanMovementForm.borrower.trim(),
+      paymentMethod: normalizeCashMethod(loanMovementForm.paymentMethod),
+      amount: roundedAmount,
+      notes: loanMovementForm.notes.trim(),
+    };
+
+    setSavingLoanMovement(true);
+
+    const { data, error } = await supabase
+      .from("pretty_salon_loan_movements")
+      .insert(toLoanMovementInsert(userId, next))
+      .select(salonLoanMovementSelect)
+      .single();
+
+    setSavingLoanMovement(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data) {
+      setLoanMovements((current) => [
+        normalizeLoanMovementRow(data as SalonLoanMovementRow),
+        ...current,
+      ]);
+    } else {
+      await loadSalonData();
+    }
+
+    setLoanMovementForm(defaultLoanMovementForm());
+    setActiveSection("caja");
+  }
+
   async function deleteTransaction(id: string) {
     if (!supabase || !userId) return;
 
@@ -1688,6 +1971,26 @@ export default function PrettyEscritorioPage() {
     }
 
     setExpensePayments((current) => current.filter((item) => item.id !== id));
+  }
+
+  async function deleteLoanMovement(id: string) {
+    if (!supabase || !userId) return;
+
+    setDeletingLoanMovementId(id);
+
+    const { error } = await supabase
+      .from("pretty_salon_loan_movements")
+      .delete()
+      .eq("id", id);
+
+    setDeletingLoanMovementId(null);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setLoanMovements((current) => current.filter((item) => item.id !== id));
   }
 
   function openCollectDialog(transaction: SalonTransaction) {
@@ -1773,6 +2076,13 @@ export default function PrettyEscritorioPage() {
     });
   }, [expensePayments]);
 
+  const sortedLoanMovements = useMemo(() => {
+    return [...loanMovements].sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      return b.id.localeCompare(a.id);
+    });
+  }, [loanMovements]);
+
   const monthOptions = useMemo(() => {
     return [
       ...new Set([
@@ -1781,10 +2091,11 @@ export default function PrettyEscritorioPage() {
         ...transactions.map((item) => item.date.slice(0, 7)),
         ...cashTransfers.map((item) => item.date.slice(0, 7)),
         ...expensePayments.map((item) => item.date.slice(0, 7)),
+        ...loanMovements.map((item) => item.date.slice(0, 7)),
       ]),
     ]
       .sort((a, b) => b.localeCompare(a));
-  }, [cashTransfers, expensePayments, selectedMonth, transactions]);
+  }, [cashTransfers, expensePayments, loanMovements, selectedMonth, transactions]);
 
   const monthlyTransactions = useMemo(() => {
     return sortedTransactions.filter((item) => item.date.startsWith(selectedMonth));
@@ -1797,6 +2108,10 @@ export default function PrettyEscritorioPage() {
   const monthlyExpensePayments = useMemo(() => {
     return sortedExpensePayments.filter((item) => item.date.startsWith(selectedMonth));
   }, [selectedMonth, sortedExpensePayments]);
+
+  const monthlyLoanMovements = useMemo(() => {
+    return sortedLoanMovements.filter((item) => item.date.startsWith(selectedMonth));
+  }, [selectedMonth, sortedLoanMovements]);
 
   const expensePaymentAllocations = useMemo(() => {
     return allocateExpensePayments(expensePayments, transactions);
@@ -1904,7 +2219,15 @@ export default function PrettyEscritorioPage() {
   const paymentBreakdown = useMemo(() => {
     const grouped = new Map<
       string,
-      { method: string; income: number; expense: number; transferIn: number; transferOut: number }
+      {
+        method: string;
+        income: number;
+        expense: number;
+        transferIn: number;
+        transferOut: number;
+        loanOut: number;
+        loanIn: number;
+      }
     >();
 
     function getMethod(method: string) {
@@ -1915,6 +2238,8 @@ export default function PrettyEscritorioPage() {
         expense: 0,
         transferIn: 0,
         transferOut: 0,
+        loanOut: 0,
+        loanIn: 0,
       };
 
       grouped.set(key, current);
@@ -1941,18 +2266,39 @@ export default function PrettyEscritorioPage() {
       getMethod(item.toMethod).transferIn += item.amount;
     }
 
+    for (const item of monthlyLoanMovements) {
+      if (item.movementType === "borrow") {
+        getMethod(item.paymentMethod).loanOut += item.amount;
+      } else {
+        getMethod(item.paymentMethod).loanIn += item.amount;
+      }
+    }
+
     return [...grouped.values()]
       .map((item) => ({
         ...item,
         transferNet: item.transferIn - item.transferOut,
-        balance: item.income - item.expense + item.transferIn - item.transferOut,
+        loanNet: item.loanIn - item.loanOut,
+        balance:
+          item.income -
+          item.expense +
+          item.transferIn -
+          item.transferOut +
+          item.loanIn -
+          item.loanOut,
       }))
       .sort((a, b) => b.balance - a.balance);
-  }, [monthlyCashTransfers, monthlyExpensePayments, monthlyTransactions]);
+  }, [monthlyCashTransfers, monthlyExpensePayments, monthlyLoanMovements, monthlyTransactions]);
 
   const cashTransferVolume = useMemo(() => {
     return monthlyCashTransfers.reduce((total, item) => total + item.amount, 0);
   }, [monthlyCashTransfers]);
+
+  const loanedBalance = useMemo(() => {
+    return loanMovements.reduce((total, item) => {
+      return total + (item.movementType === "borrow" ? item.amount : -item.amount);
+    }, 0);
+  }, [loanMovements]);
 
   const clientRows = useMemo(() => {
     const grouped = new Map<
@@ -2453,6 +2799,21 @@ export default function PrettyEscritorioPage() {
                                 {formatSignedMoney(item.transferNet)}
                               </span>
                             </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[#aeb5bf]">Prestado</span>
+                              <span
+                                className={[
+                                  "font-semibold",
+                                  item.loanNet > 0
+                                    ? "text-[#71f2d8]"
+                                    : item.loanNet < 0
+                                      ? "text-[#ff8aa1]"
+                                      : "text-[#aeb5bf]",
+                                ].join(" ")}
+                              >
+                                {formatSignedMoney(item.loanNet)}
+                              </span>
+                            </div>
                           </div>
                         </article>
                       ))}
@@ -2504,6 +2865,75 @@ export default function PrettyEscritorioPage() {
                                   className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   {deletingCashTransferId === item.id ? "Eliminando..." : "Eliminar"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                  <SectionTitle
+                    label="Prestado"
+                    title="Dinero pendiente de reponer"
+                    description="Retiros temporales y reposiciones. No se cuentan como gasto ni como deuda por pagar."
+                  />
+                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
+                    <table className="min-w-[760px] w-full text-left text-sm">
+                      <thead className="bg-[#111316] text-[#aeb5bf]">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Fecha</th>
+                          <th className="px-4 py-3 font-medium">Movimiento</th>
+                          <th className="px-4 py-3 font-medium">Quien</th>
+                          <th className="px-4 py-3 font-medium">Metodo</th>
+                          <th className="px-4 py-3 text-right font-medium">Monto</th>
+                          <th className="px-4 py-3 font-medium">Notas</th>
+                          <th className="px-4 py-3 text-right font-medium">Accion</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#30333a]">
+                        {monthlyLoanMovements.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-6 text-center text-[#aeb5bf]">
+                              Aun no hay dinero prestado o repuesto en este mes.
+                            </td>
+                          </tr>
+                        ) : (
+                          monthlyLoanMovements.map((item) => (
+                            <tr key={item.id} className="align-top">
+                              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
+                              <td
+                                className={[
+                                  "px-4 py-4 font-semibold",
+                                  item.movementType === "borrow" ? "text-[#ff8aa1]" : "text-[#71f2d8]",
+                                ].join(" ")}
+                              >
+                                {item.movementType === "borrow" ? "Prestado" : "Reposicion"}
+                              </td>
+                              <td className="px-4 py-4 text-[#d8dde3]">{item.borrower || "Sin nombre"}</td>
+                              <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
+                              <td
+                                className={[
+                                  "px-4 py-4 text-right font-semibold",
+                                  item.movementType === "borrow" ? "text-[#ff8aa1]" : "text-[#71f2d8]",
+                                ].join(" ")}
+                              >
+                                {item.movementType === "borrow" ? "-" : "+"}
+                                {money.format(item.amount)}
+                              </td>
+                              <td className="px-4 py-4 text-[#aeb5bf]">
+                                {item.notes || "Sin notas"}
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <button
+                                  onClick={() => deleteLoanMovement(item.id)}
+                                  disabled={deletingLoanMovementId === item.id}
+                                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {deletingLoanMovementId === item.id ? "Eliminando..." : "Eliminar"}
                                 </button>
                               </td>
                             </tr>
@@ -2616,6 +3046,17 @@ export default function PrettyEscritorioPage() {
                         {money.format(cashTransferVolume)}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between gap-4 border-b border-[#30333a] pb-3">
+                      <span className="text-[#aeb5bf]">Prestado pendiente</span>
+                      <span
+                        className={[
+                          "font-semibold",
+                          loanedBalance > 0 ? "text-[#ffe06b]" : "text-[#71f2d8]",
+                        ].join(" ")}
+                      >
+                        {money.format(Math.max(loanedBalance, 0))}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-[#aeb5bf]">Saldo proyectado</span>
                       <span className="font-semibold text-[#70d6ff]">
@@ -2630,6 +3071,12 @@ export default function PrettyEscritorioPage() {
                   submitting={savingCashTransfer}
                   onChange={updateCashTransferForm}
                   onSubmit={addCashTransfer}
+                />
+                <LoanMovementForm
+                  form={loanMovementForm}
+                  submitting={savingLoanMovement}
+                  onChange={updateLoanMovementForm}
+                  onSubmit={addLoanMovement}
                 />
               </div>
             </section>
