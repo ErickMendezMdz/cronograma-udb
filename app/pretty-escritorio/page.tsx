@@ -673,6 +673,27 @@ function buildBreakdown(items: SalonTransaction[], colors: string[]): BreakdownI
     .sort((a, b) => b.value - a.value);
 }
 
+function buildValueBreakdown(items: Array<{ label: string; value: number }>, colors: string[]): BreakdownItem[] {
+  const grouped = new Map<string, number>();
+
+  for (const item of items) {
+    const key = item.label.trim() || "Sin categoria";
+    grouped.set(key, (grouped.get(key) ?? 0) + item.value);
+  }
+
+  const total = [...grouped.values()].reduce((sum, value) => sum + value, 0);
+
+  return [...grouped.entries()]
+    .filter(([, value]) => value > 0)
+    .map(([label, value], index) => ({
+      label,
+      value,
+      share: total > 0 ? (value / total) * 100 : 0,
+      color: colors[index % colors.length],
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
 function getStatusLabel(status: SalonStatus, kind: TransactionKind) {
   if (status === "paid") {
     return kind === "income" ? "Cobrado" : "Pagado";
@@ -2188,6 +2209,42 @@ export default function PrettyEscritorioPage() {
     return buildBreakdown(paidExpensePortions, ["#ff5f7e", "#f7d84a", "#70d6ff", "#b8f060", "#00c2a8"]);
   }, [cashExpensePaymentAllocations, monthlyTransactions]);
 
+  const pendingExpenseBreakdown = useMemo(() => {
+    return buildValueBreakdown(
+      monthlyTransactions
+        .filter((item) => item.kind === "expense" && item.status === "pending")
+        .map((item) => ({
+          label: item.category,
+          value: Math.max(item.amount - (expensePaymentAllocations.get(item.id) ?? 0), 0),
+        })),
+      ["#ffe06b", "#ff8aa1", "#70d6ff", "#b8f060", "#00c2a8"]
+    );
+  }, [expensePaymentAllocations, monthlyTransactions]);
+
+  const pendingIncomeBreakdown = useMemo(() => {
+    return buildValueBreakdown(
+      monthlyTransactions
+        .filter((item) => item.kind === "income" && item.status === "pending")
+        .map((item) => ({ label: item.category, value: item.amount })),
+      ["#ffe06b", "#70d6ff", "#00c2a8", "#f7d84a", "#ff8aa1"]
+    );
+  }, [monthlyTransactions]);
+
+  const loanBreakdown = useMemo(() => {
+    const grouped = new Map<string, number>();
+
+    for (const item of monthlyLoanMovements) {
+      const label = item.borrower.trim() || "Sin nombre";
+      const value = item.movementType === "borrow" ? item.amount : -item.amount;
+      grouped.set(label, (grouped.get(label) ?? 0) + value);
+    }
+
+    return buildValueBreakdown(
+      [...grouped.entries()].map(([label, value]) => ({ label, value: Math.max(value, 0) })),
+      ["#f7d84a", "#70d6ff", "#ff8aa1", "#00c2a8", "#b8f060"]
+    );
+  }, [monthlyLoanMovements]);
+
   const dailyTrend = useMemo(() => {
     return Array.from({ length: 10 }, (_, index) => {
       const date = dateDaysAgo(9 - index);
@@ -3186,49 +3243,97 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "reportes" ? (
-            <section className="mt-6 min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-              <SectionTitle
-                label="Reportes"
-                title="Resumen mensual"
-                description="Lectura rapida de ingresos, gastos, pendientes y margen por mes."
-              />
-              <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                <table className="min-w-[760px] w-full text-left text-sm">
-                  <thead className="bg-[#111316] text-[#aeb5bf]">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Mes</th>
-                      <th className="px-4 py-3 text-right font-medium">Ingresos</th>
-                      <th className="px-4 py-3 text-right font-medium">Gastos</th>
-                      <th className="px-4 py-3 text-right font-medium">Utilidad</th>
-                      <th className="px-4 py-3 text-right font-medium">Pendientes</th>
-                      <th className="px-4 py-3 text-right font-medium">Margen</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#30333a]">
-                    {monthlyReports.map((report) => (
-                      <tr key={report.month}>
-                        <td className="px-4 py-4 font-medium text-[#f7f9fb]">
-                          {formatMonth(report.month)}
-                        </td>
-                        <td className="px-4 py-4 text-right text-[#71f2d8]">
-                          {money.format(report.income)}
-                        </td>
-                        <td className="px-4 py-4 text-right text-[#ff8aa1]">
-                          {money.format(report.expenses)}
-                        </td>
-                        <td className="px-4 py-4 text-right font-semibold text-[#f7f9fb]">
-                          {money.format(report.profit)}
-                        </td>
-                        <td className="px-4 py-4 text-right text-[#ffe06b]">
-                          {money.format(report.pending)}
-                        </td>
-                        <td className="px-4 py-4 text-right text-[#70d6ff]">
-                          {report.margin.toFixed(1)}%
-                        </td>
+            <section className="mt-6 grid min-w-0 gap-4">
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                <SectionTitle
+                  label="Reportes"
+                  title="Resumen mensual"
+                  description="Lectura rapida de ingresos, gastos, pendientes y margen por mes."
+                />
+                <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
+                  <table className="min-w-[760px] w-full text-left text-sm">
+                    <thead className="bg-[#111316] text-[#aeb5bf]">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Mes</th>
+                        <th className="px-4 py-3 text-right font-medium">Ingresos</th>
+                        <th className="px-4 py-3 text-right font-medium">Gastos</th>
+                        <th className="px-4 py-3 text-right font-medium">Utilidad</th>
+                        <th className="px-4 py-3 text-right font-medium">Pendientes</th>
+                        <th className="px-4 py-3 text-right font-medium">Margen</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#30333a]">
+                      {monthlyReports.map((report) => (
+                        <tr key={report.month}>
+                          <td className="px-4 py-4 font-medium text-[#f7f9fb]">
+                            {formatMonth(report.month)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-[#71f2d8]">
+                            {money.format(report.income)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-[#ff8aa1]">
+                            {money.format(report.expenses)}
+                          </td>
+                          <td className="px-4 py-4 text-right font-semibold text-[#f7f9fb]">
+                            {money.format(report.profit)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-[#ffe06b]">
+                            {money.format(report.pending)}
+                          </td>
+                          <td className="px-4 py-4 text-right text-[#70d6ff]">
+                            {report.margin.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                <SectionTitle
+                  label={formatMonth(selectedMonth)}
+                  title="Detalle por categoria"
+                  description="Montos del mes seleccionado para revisar gastos, prestamos y pendientes."
+                />
+                <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
+                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
+                    <h3 className="text-base font-semibold text-[#f7f9fb]">Gastos pagados</h3>
+                    <div className="mt-4">
+                      <BreakdownList
+                        items={expenseBreakdown}
+                        emptyMessage="No hay gastos pagados por categoria en este mes."
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
+                    <h3 className="text-base font-semibold text-[#f7f9fb]">Prestado pendiente</h3>
+                    <div className="mt-4">
+                      <BreakdownList
+                        items={loanBreakdown}
+                        emptyMessage="No hay dinero prestado pendiente en este mes."
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
+                    <h3 className="text-base font-semibold text-[#f7f9fb]">Por pagar</h3>
+                    <div className="mt-4">
+                      <BreakdownList
+                        items={pendingExpenseBreakdown}
+                        emptyMessage="No hay gastos por pagar en este mes."
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
+                    <h3 className="text-base font-semibold text-[#f7f9fb]">Por cobrar</h3>
+                    <div className="mt-4">
+                      <BreakdownList
+                        items={pendingIncomeBreakdown}
+                        emptyMessage="No hay ingresos por cobrar en este mes."
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
           ) : null}
