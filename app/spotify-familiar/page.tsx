@@ -746,45 +746,6 @@ export default function SpotifyFamiliarPage() {
                           <p className="mt-2 text-sm text-emerald-300">Va al dia</p>
                         )}
                       </div>
-
-                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                        <button
-                          onClick={() => quickPay(member)}
-                          disabled={savingPaymentFor === member.id || !member.active}
-                          className="rounded-xl bg-green-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
-                        >
-                          {savingPaymentFor === member.id
-                            ? "Guardando..."
-                            : `Confirmar ${money.format(member.monthlyAmount)}`}
-                        </button>
-                        <button
-                          onClick={() => openPaymentDraft(member, 2)}
-                          disabled={!member.active}
-                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          +2 meses
-                        </button>
-                        <button
-                          onClick={() => openPaymentDraft(member)}
-                          disabled={!member.active}
-                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          Modificar pago
-                        </button>
-                        <button
-                          onClick={() => openMemberDraft(member)}
-                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-                        >
-                          Editar persona
-                        </button>
-                        <button
-                          onClick={() => deleteMember(member)}
-                          disabled={deletingMemberId === member.id}
-                          className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-60 sm:col-span-2"
-                        >
-                          {deletingMemberId === member.id ? "Eliminando..." : "Eliminar"}
-                        </button>
-                      </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12">
@@ -820,6 +781,44 @@ export default function SpotifyFamiliarPage() {
                       })}
                     </div>
                     <p className="mt-3 text-xs text-slate-500">Siguiente aplicacion automatica: {formatMonth(nextMonth)}</p>
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                      <button
+                        onClick={() => quickPay(member)}
+                        disabled={savingPaymentFor === member.id || !member.active}
+                        className="rounded-xl bg-green-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+                      >
+                        {savingPaymentFor === member.id
+                          ? "Guardando..."
+                          : `Confirmar ${money.format(member.monthlyAmount)}`}
+                      </button>
+                      <button
+                        onClick={() => openPaymentDraft(member, 2)}
+                        disabled={!member.active}
+                        className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        +2 meses
+                      </button>
+                      <button
+                        onClick={() => openPaymentDraft(member)}
+                        disabled={!member.active}
+                        className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        Modificar pago
+                      </button>
+                      <button
+                        onClick={() => openMemberDraft(member)}
+                        className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                      >
+                        Editar persona
+                      </button>
+                      <button
+                        onClick={() => deleteMember(member)}
+                        disabled={deletingMemberId === member.id}
+                        className="rounded-xl border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-60 sm:col-span-2"
+                      >
+                        {deletingMemberId === member.id ? "Eliminando..." : "Eliminar"}
+                      </button>
+                    </div>
                   </article>
                 );
               })
