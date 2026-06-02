@@ -1388,6 +1388,8 @@ function ExpensePaymentDialog({
 export default function PrettyEscritorioPage() {
   const router = useRouter();
   const actionAreaRef = useRef<HTMLDivElement>(null);
+  const cashTransferFormRef = useRef<HTMLDivElement>(null);
+  const loanMovementFormRef = useRef<HTMLDivElement>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const configError = useMemo(() => getSupabaseConfigError(), []);
 
@@ -1680,6 +1682,18 @@ export default function PrettyEscritorioPage() {
       paymentMethod: normalizeExpenseSettlementMethod(current.paymentMethod),
     }));
     setExpensePaymentDialogOpen(true);
+  }
+
+  function openCashAction(target: "transfer" | "loan") {
+    switchSection("caja");
+
+    window.setTimeout(() => {
+      const targetRef = target === "transfer" ? cashTransferFormRef : loanMovementFormRef;
+      targetRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 120);
   }
 
   function openIncomeForm(paymentMethod = "Efectivo") {
@@ -2451,7 +2465,6 @@ export default function PrettyEscritorioPage() {
           <div className="flex items-start justify-between gap-4 lg:block">
             <div className="min-w-0">
               <p className="text-2xl font-semibold leading-tight text-[#f7f9fb]">Pretty Salon</p>
-              <p className="mt-1 text-sm text-[#aeb5bf]">Control de ingresos y gastos</p>
             </div>
             <Link
               href="/modulos"
@@ -2512,9 +2525,6 @@ export default function PrettyEscritorioPage() {
               <h1 className="mt-2 max-w-full text-3xl font-semibold leading-tight text-[#f7f9fb] sm:text-5xl">
                 Dashboard financiero
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-[#aeb5bf]">
-                Registra servicios, productos, insumos y pagos pendientes.
-              </p>
             </div>
 
             <div className="grid min-w-0 gap-3 sm:flex sm:items-center">
@@ -2532,26 +2542,6 @@ export default function PrettyEscritorioPage() {
                   ))}
                 </select>
               </label>
-              <div className="grid grid-cols-3 gap-2 sm:mt-7 sm:flex">
-                <button
-                  onClick={() => openIncomeForm("Efectivo")}
-                  className="min-w-0 rounded-lg bg-[#00c2a8] px-3 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] sm:px-4"
-                >
-                  Ingreso
-                </button>
-                <button
-                  onClick={() => openIncomeForm("Credito")}
-                  className="min-w-0 rounded-lg border border-[#f7d84a] px-3 py-3 text-sm font-semibold text-[#ffe06b] transition hover:bg-[#302a12] sm:px-4"
-                >
-                  Credito
-                </button>
-                <button
-                  onClick={openExpenseForm}
-                  className="min-w-0 rounded-lg border border-[#ff5f7e] px-3 py-3 text-sm font-semibold text-[#ff8aa1] transition hover:bg-[#321820] sm:px-4"
-                >
-                  Gasto
-                </button>
-              </div>
             </div>
           </header>
 
@@ -2613,6 +2603,45 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "dashboard" ? (
             <>
+              <section className="mt-6 min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
+                <SectionTitle
+                  label="Accesos rapidos"
+                  title="Registrar movimiento"
+                  description="Entradas directas para las acciones mas usadas en caja."
+                />
+                <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <button
+                    onClick={() => openIncomeForm("Efectivo")}
+                    className="min-w-0 rounded-lg border border-[#00c2a8] bg-[#0f312e] px-4 py-4 text-left transition hover:bg-[#123b37]"
+                  >
+                    <span className="block text-base font-semibold text-[#71f2d8]">Ingreso</span>
+                    <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar ingreso</span>
+                  </button>
+                  <button
+                    onClick={() => openCashAction("transfer")}
+                    className="min-w-0 rounded-lg border border-[#70d6ff] bg-[#132936] px-4 py-4 text-left transition hover:bg-[#173344]"
+                  >
+                    <span className="block text-base font-semibold text-[#70d6ff]">Traslado</span>
+                    <span className="mt-1 block text-xs text-[#aeb5bf]">Mover efectivo o banco</span>
+                  </button>
+                  <button
+                    onClick={() => openCashAction("loan")}
+                    className="min-w-0 rounded-lg border border-[#f7d84a] bg-[#302a12] px-4 py-4 text-left transition hover:bg-[#3b3315]"
+                  >
+                    <span className="block text-base font-semibold text-[#ffe06b]">Prestado</span>
+                    <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar dinero tomado</span>
+                  </button>
+                  <button
+                    onClick={openExpensePaymentDialog}
+                    disabled={totalPendingExpenses <= 0}
+                    className="min-w-0 rounded-lg border border-[#ff5f7e] bg-[#321820] px-4 py-4 text-left transition hover:bg-[#3f1d27] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="block text-base font-semibold text-[#ff8aa1]">Abono</span>
+                    <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar abono</span>
+                  </button>
+                </div>
+              </section>
+
               <section className="mt-6 grid min-w-0 gap-4">
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
@@ -3123,18 +3152,22 @@ export default function PrettyEscritorioPage() {
                   </div>
                 </div>
 
-                <CashTransferForm
-                  form={cashTransferForm}
-                  submitting={savingCashTransfer}
-                  onChange={updateCashTransferForm}
-                  onSubmit={addCashTransfer}
-                />
-                <LoanMovementForm
-                  form={loanMovementForm}
-                  submitting={savingLoanMovement}
-                  onChange={updateLoanMovementForm}
-                  onSubmit={addLoanMovement}
-                />
+                <div ref={cashTransferFormRef} className="scroll-mt-4">
+                  <CashTransferForm
+                    form={cashTransferForm}
+                    submitting={savingCashTransfer}
+                    onChange={updateCashTransferForm}
+                    onSubmit={addCashTransfer}
+                  />
+                </div>
+                <div ref={loanMovementFormRef} className="scroll-mt-4">
+                  <LoanMovementForm
+                    form={loanMovementForm}
+                    submitting={savingLoanMovement}
+                    onChange={updateLoanMovementForm}
+                    onSubmit={addLoanMovement}
+                  />
+                </div>
               </div>
             </section>
           ) : null}
