@@ -1388,6 +1388,7 @@ function ExpensePaymentDialog({
 export default function PrettyEscritorioPage() {
   const router = useRouter();
   const actionAreaRef = useRef<HTMLDivElement>(null);
+  const quickAccessRef = useRef<HTMLDivElement>(null);
   const cashTransferFormRef = useRef<HTMLDivElement>(null);
   const loanMovementFormRef = useRef<HTMLDivElement>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -1628,6 +1629,17 @@ export default function PrettyEscritorioPage() {
     scrollToActionArea();
   }
 
+  function returnToQuickAccess() {
+    setActiveSection("dashboard");
+
+    window.setTimeout(() => {
+      quickAccessRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 120);
+  }
+
   function updateIncomeForm<K extends keyof TransactionFormState>(
     field: K,
     value: TransactionFormState[K]
@@ -1779,10 +1791,10 @@ export default function PrettyEscritorioPage() {
 
     if (kind === "income") {
       setIncomeForm(defaultIncomeForm());
-      setActiveSection("ingresos");
+      returnToQuickAccess();
     } else {
       setExpenseForm(defaultExpenseForm());
-      setActiveSection("gastos");
+      returnToQuickAccess();
     }
   }
 
@@ -1836,7 +1848,7 @@ export default function PrettyEscritorioPage() {
     }
 
     setCashTransferForm(defaultCashTransferForm());
-    setActiveSection("caja");
+    returnToQuickAccess();
   }
 
   async function addExpensePayment(event: FormEvent<HTMLFormElement>) {
@@ -1890,7 +1902,7 @@ export default function PrettyEscritorioPage() {
 
     setExpensePaymentForm(defaultExpensePaymentForm());
     setExpensePaymentDialogOpen(false);
-    setActiveSection("caja");
+    returnToQuickAccess();
   }
 
   async function addLoanMovement(event: FormEvent<HTMLFormElement>) {
@@ -1945,7 +1957,7 @@ export default function PrettyEscritorioPage() {
     }
 
     setLoanMovementForm(defaultLoanMovementForm());
-    setActiveSection("caja");
+    returnToQuickAccess();
   }
 
   async function deleteTransaction(id: string) {
@@ -2572,6 +2584,57 @@ export default function PrettyEscritorioPage() {
             </div>
           ) : null}
 
+          {activeSection === "dashboard" ? (
+            <section
+              ref={quickAccessRef}
+              className="mt-6 min-w-0 scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4"
+            >
+              <SectionTitle
+                label="Accesos rapidos"
+                title="Registrar movimiento"
+                description="Entradas directas para las acciones mas usadas en caja."
+              />
+              <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <button
+                  onClick={() => openIncomeForm("Efectivo")}
+                  className="min-w-0 rounded-lg border border-[#00c2a8] bg-[#0f312e] px-4 py-4 text-left transition hover:bg-[#123b37]"
+                >
+                  <span className="block text-base font-semibold text-[#71f2d8]">Ingreso</span>
+                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar ingreso</span>
+                </button>
+                <button
+                  onClick={openExpenseForm}
+                  className="min-w-0 rounded-lg border border-[#ff5f7e] bg-[#321820] px-4 py-4 text-left transition hover:bg-[#3f1d27]"
+                >
+                  <span className="block text-base font-semibold text-[#ff8aa1]">Gastos</span>
+                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar gasto</span>
+                </button>
+                <button
+                  onClick={() => openCashAction("transfer")}
+                  className="min-w-0 rounded-lg border border-[#70d6ff] bg-[#132936] px-4 py-4 text-left transition hover:bg-[#173344]"
+                >
+                  <span className="block text-base font-semibold text-[#70d6ff]">Traslado</span>
+                  <span className="mt-1 block text-xs text-[#aeb5bf]">Mover efectivo o banco</span>
+                </button>
+                <button
+                  onClick={() => openCashAction("loan")}
+                  className="min-w-0 rounded-lg border border-[#f7d84a] bg-[#302a12] px-4 py-4 text-left transition hover:bg-[#3b3315]"
+                >
+                  <span className="block text-base font-semibold text-[#ffe06b]">Prestado</span>
+                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar dinero tomado</span>
+                </button>
+                <button
+                  onClick={openExpensePaymentDialog}
+                  disabled={totalPendingExpenses <= 0}
+                  className="min-w-0 rounded-lg border border-[#b8f060] bg-[#20311f] px-4 py-4 text-left transition hover:bg-[#273b25] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="block text-base font-semibold text-[#d8ff94]">Abono</span>
+                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar abono</span>
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           <section className="mt-6 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="Utilidad real"
@@ -2603,45 +2666,6 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "dashboard" ? (
             <>
-              <section className="mt-6 min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                <SectionTitle
-                  label="Accesos rapidos"
-                  title="Registrar movimiento"
-                  description="Entradas directas para las acciones mas usadas en caja."
-                />
-                <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <button
-                    onClick={() => openIncomeForm("Efectivo")}
-                    className="min-w-0 rounded-lg border border-[#00c2a8] bg-[#0f312e] px-4 py-4 text-left transition hover:bg-[#123b37]"
-                  >
-                    <span className="block text-base font-semibold text-[#71f2d8]">Ingreso</span>
-                    <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar ingreso</span>
-                  </button>
-                  <button
-                    onClick={() => openCashAction("transfer")}
-                    className="min-w-0 rounded-lg border border-[#70d6ff] bg-[#132936] px-4 py-4 text-left transition hover:bg-[#173344]"
-                  >
-                    <span className="block text-base font-semibold text-[#70d6ff]">Traslado</span>
-                    <span className="mt-1 block text-xs text-[#aeb5bf]">Mover efectivo o banco</span>
-                  </button>
-                  <button
-                    onClick={() => openCashAction("loan")}
-                    className="min-w-0 rounded-lg border border-[#f7d84a] bg-[#302a12] px-4 py-4 text-left transition hover:bg-[#3b3315]"
-                  >
-                    <span className="block text-base font-semibold text-[#ffe06b]">Prestado</span>
-                    <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar dinero tomado</span>
-                  </button>
-                  <button
-                    onClick={openExpensePaymentDialog}
-                    disabled={totalPendingExpenses <= 0}
-                    className="min-w-0 rounded-lg border border-[#ff5f7e] bg-[#321820] px-4 py-4 text-left transition hover:bg-[#3f1d27] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span className="block text-base font-semibold text-[#ff8aa1]">Abono</span>
-                    <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar abono</span>
-                  </button>
-                </div>
-              </section>
-
               <section className="mt-6 grid min-w-0 gap-4">
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
                   <SectionTitle
