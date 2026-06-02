@@ -735,9 +735,6 @@ export default function SpotifyFamiliarPage() {
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-sm text-slate-400">
-                          {money.format(member.monthlyAmount)} mensual desde {formatMonth(member.startMonth)}
-                        </p>
                         {debt.pendingMonths.length > 0 ? (
                           <p className="mt-2 text-sm text-red-300">
                             Debe {money.format(debt.total)}: {debt.pendingMonths.map(formatMonth).join(", ")}
