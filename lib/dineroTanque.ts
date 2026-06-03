@@ -1,16 +1,9 @@
-export type TankExpense = {
-  id: string;
-  title: string;
-  category: string;
-  amount: number;
-  date: string;
-  notes: string;
-};
+import type {
+  TankExpense,
+  TankMoneyState,
+} from "@/features/dinero-tanque/types";
 
-export type TankMoneyState = {
-  budget: number;
-  expenses: TankExpense[];
-};
+export type { TankExpense, TankMoneyState };
 
 export function createEmptyTankState(): TankMoneyState {
   return {
