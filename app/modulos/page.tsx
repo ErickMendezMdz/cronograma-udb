@@ -8,6 +8,46 @@ import {
   getSupabaseConfigError,
 } from "@/lib/supabaseClient";
 import { isSalonOnlyEmail } from "@/lib/moduleAccess";
+import { appModules, type AppModule } from "@/config/modules";
+import { PortalShell } from "@/components/layout/PortalShell";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+
+const moduleAccentClasses: Record<
+  AppModule["accent"],
+  {
+    border: string;
+    label: string;
+    card: string;
+    badge: AppModule["accent"];
+  }
+> = {
+  blue: {
+    border: "hover:border-blue-400/60",
+    label: "text-blue-300",
+    card: "bg-slate-900/85 hover:bg-slate-900",
+    badge: "blue",
+  },
+  emerald: {
+    border: "hover:border-emerald-400/60",
+    label: "text-emerald-300",
+    card: "bg-slate-900/85 hover:bg-slate-900",
+    badge: "emerald",
+  },
+  green: {
+    border: "hover:border-green-400/60",
+    label: "text-green-300",
+    card: "bg-slate-900/85 hover:bg-slate-900",
+    badge: "green",
+  },
+  salon: {
+    border: "hover:border-[#d6b48a]/70",
+    label: "text-[#d8be9d]",
+    card: "bg-[linear-gradient(145deg,rgba(31,25,22,0.94),rgba(14,14,15,0.94))]",
+    badge: "salon",
+  },
+};
 
 export default function ModulosPage() {
   const router = useRouter();
@@ -64,122 +104,76 @@ export default function ModulosPage() {
     );
   }
 
+  const visibleModules = salonOnly
+    ? appModules.filter((moduleItem) => moduleItem.salonOnly)
+    : appModules;
+
   return (
-    <div className="min-h-screen bg-transparent p-4 text-slate-100">
-      <div className="mx-auto max-w-6xl">
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/85 p-5 shadow-2xl shadow-black/20 backdrop-blur">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-sm uppercase tracking-[0.24em] text-slate-400">Panel</p>
-              <h1 className="mt-2 text-2xl font-semibold">
-                {salonOnly ? "Pretty Salon" : "Seleccioná un módulo"}
-              </h1>
-              <p className="mt-2 text-sm text-slate-400">
-                {email
-                  ? salonOnly
-                    ? `Sesión activa: ${email}. Acceso asignado al salon.`
-                    : `Sesión activa: ${email}`
-                  : "Elegí a dónde querés entrar."}
-              </p>
-            </div>
+    <PortalShell
+      email={email}
+      salonOnly={salonOnly}
+      actions={
+        <Button onClick={handleLogout} variant="secondary">
+          Salir
+        </Button>
+      }
+    >
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {visibleModules.map((moduleItem) => {
+          const accent = moduleAccentClasses[moduleItem.accent];
 
-            <button
-              onClick={handleLogout}
-              className="rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
-            >
-              Salir
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {!salonOnly ? (
-            <>
-              <Link
-                href="/cronograma"
-                className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-blue-400/60 hover:bg-slate-900"
+          return (
+            <Link key={moduleItem.id} href={moduleItem.href} className="group">
+              <Card
+                className={[
+                  "h-full p-6 transition group-hover:-translate-y-1",
+                  accent.card,
+                  moduleItem.accent === "salon"
+                    ? "border-[#6f5641]"
+                    : "border-slate-700",
+                  accent.border,
+                ].join(" ")}
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex h-full items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">
-                      Disponible
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold">Cronograma</h2>
-                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                      Gestioná materias y actividades semanales desde el calendario que ya tenés construido.
+                    {moduleItem.status ? (
+                      <p
+                        className={[
+                          "text-xs font-semibold uppercase tracking-[0.22em]",
+                          accent.label,
+                        ].join(" ")}
+                      >
+                        {moduleItem.status}
+                      </p>
+                    ) : null}
+                    <h2
+                      className={[
+                        "mt-3 text-2xl font-semibold",
+                        moduleItem.accent === "salon" ? "text-[#f3e8d8]" : "",
+                      ].join(" ")}
+                    >
+                      {moduleItem.name}
+                    </h2>
+                    <p
+                      className={[
+                        "mt-3 max-w-md text-sm leading-6",
+                        moduleItem.accent === "salon"
+                          ? "text-[#c2b19f]"
+                          : "text-slate-400",
+                      ].join(" ")}
+                    >
+                      {moduleItem.description}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-blue-500/15 px-3 py-2 text-sm font-semibold text-blue-200">
+                  <Badge tone={accent.badge} className="rounded-2xl px-3 py-2 text-sm">
                     Entrar
-                  </div>
+                  </Badge>
                 </div>
-              </Link>
-
-              <Link
-                href="/dinero-tanque"
-                className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-emerald-400/60 hover:bg-slate-900"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
-                      Disponible
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold">Dinero Tanque</h2>
-                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                      Registrá compras, controlá gastos y mirá cuánto dinero tenés disponible para seguir construyendo.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-emerald-200">
-                    Entrar
-                  </div>
-                </div>
-              </Link>
-
-              <Link
-                href="/spotify-familiar"
-                className="group rounded-3xl border border-slate-700 bg-slate-900/85 p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-green-400/60 hover:bg-slate-900"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-green-300">
-                      Nuevo
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold">Spotify Familiar</h2>
-                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                      Controla quien pago cada mes, registra abonos rapidos y mira deudas acumuladas en matriz.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-green-500/15 px-3 py-2 text-sm font-semibold text-green-200">
-                    Entrar
-                  </div>
-                </div>
-              </Link>
-            </>
-          ) : null}
-
-          <Link
-            href="/pretty-escritorio"
-            className="group rounded-3xl border border-[#6f5641] bg-[linear-gradient(145deg,rgba(31,25,22,0.94),rgba(14,14,15,0.94))] p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-[#d6b48a]/70"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#d8be9d]">
-                  Nuevo
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold text-[#f3e8d8]">
-                  Pretty - Salon de belleza
-                </h2>
-                <p className="mt-3 max-w-md text-sm leading-6 text-[#c2b19f]">
-                  Dashboard para controlar ingresos, gastos, caja, clientes y servicios del salon.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-[#d6b48a]/15 px-3 py-2 text-sm font-semibold text-[#ecd3b2]">
-                Entrar
-              </div>
-            </div>
-          </Link>
-        </div>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
-    </div>
+    </PortalShell>
   );
 }

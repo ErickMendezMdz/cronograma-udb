@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-let supabaseClient: ReturnType<typeof createClient<any>> | null = null;
+let supabaseClient: SupabaseClient | null = null;
 
 export function getSupabaseConfigError() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -22,7 +22,7 @@ export function getSupabaseBrowserClient() {
   }
 
   if (!supabaseClient) {
-    supabaseClient = createClient<any>(
+    supabaseClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL as string,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
     );

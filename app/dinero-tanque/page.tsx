@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ModuleShell } from "@/components/layout/ModuleShell";
 import {
   clearLegacyTankState,
   createEmptyTankState,
@@ -358,30 +358,22 @@ export default function DineroTanquePage() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent p-4 text-slate-100">
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-2xl border border-slate-700/70 bg-slate-900/85 p-5 shadow-2xl shadow-black/20 backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                <Link href="/modulos" className="rounded-full border border-slate-700 px-3 py-1 hover:bg-slate-800">
-                  Volver a modulos
-                </Link>
-                <span>{email ? `Sesion: ${email}` : "Dinero Tanque"}</span>
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold">Dinero Tanque</h1>
-            </div>
+    <ModuleShell
+      title="Dinero Tanque"
+      actions={
+        <button
+          onClick={handleLogout}
+          className="rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
+        >
+          Salir
+        </button>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+        <span>{email ? `Sesion: ${email}` : "Dinero Tanque"}</span>
+      </div>
 
-            <button
-              onClick={handleLogout}
-              className="rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800"
-            >
-              Salir
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-5">
             <p className="text-sm uppercase tracking-[0.2em] text-emerald-300">Disponible</p>
             <p className="mt-4 text-3xl font-semibold text-emerald-100">{money.format(available)}</p>
@@ -526,7 +518,6 @@ export default function DineroTanquePage() {
             )}
           </section>
         </div>
-      </div>
 
       <div className="fixed inset-x-4 bottom-4 z-40 grid grid-cols-2 gap-3 sm:hidden">
         <button
@@ -675,6 +666,6 @@ export default function DineroTanquePage() {
           </div>
         </div>
       )}
-    </div>
+    </ModuleShell>
   );
 }
