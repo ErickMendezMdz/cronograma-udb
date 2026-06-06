@@ -2,7 +2,7 @@
 
 This folder prepares the gradual modularization of `/pretty-escritorio`.
 
-Current phase: shared domain pieces, Supabase access, the main stateful orchestration, and presentational dashboard/report/list components are extracted. The page still owns forms, modals, and larger visual sections while deeper component splits are pending.
+Current phase: shared domain pieces, Supabase access, the main stateful orchestration, presentational dashboard/report/list components, and controlled form components are extracted. The page still owns modals and larger visual sections while deeper component splits are pending.
 
 ## Proposed structure
 
@@ -11,6 +11,7 @@ Current phase: shared domain pieces, Supabase access, the main stateful orchestr
 - `utils.ts`: pure helpers for dates, money formatting, normalization, legacy parsing, insert mapping, payment allocation, totals, breakdowns, and status labels.
 - `services/prettySalonService.ts`: Supabase access layer for transactions, cash transfers, expense payments, and loan movements.
 - `hooks/usePrettySalon.ts`: main stateful orchestration for auth session, data loading, legacy migration, forms, CRUD handlers, navigation state, and derived reports.
+- `components/forms/`: controlled presentational forms for income, expenses, transfers, and loan movements. Modal-bound forms remain pending.
 - `components/dashboard/`: small presentational dashboard pieces such as metric cards, balance cards, section tabs, quick actions, and the dashboard header.
 - `components/transactions/`: presentational transaction lists/items, plus future income/expense forms and collection flows.
 - `components/expenses/`: presentational expense payment tables, plus future expense payment dialogs and settlement views.

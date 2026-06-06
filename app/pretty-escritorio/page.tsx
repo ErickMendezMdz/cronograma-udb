@@ -3,7 +3,6 @@
 import { type FormEvent } from "react";
 import Link from "next/link";
 import {
-  cashMovementMethods,
   collectionPaymentMethods,
   expenseCategories,
   expensePaymentMethods,
@@ -23,25 +22,17 @@ import { PrettyDailyTrend } from "@/features/pretty-salon/components/reports/Pre
 import { PrettyPaymentMethodBreakdown } from "@/features/pretty-salon/components/reports/PrettyPaymentMethodBreakdown";
 import { PrettyReportsSection } from "@/features/pretty-salon/components/reports/PrettyReportsSection";
 import { PrettyExpensePaymentsTable } from "@/features/pretty-salon/components/expenses/PrettyExpensePaymentsTable";
+import { PrettyExpenseForm } from "@/features/pretty-salon/components/forms/PrettyExpenseForm";
+import { PrettyIncomeForm } from "@/features/pretty-salon/components/forms/PrettyIncomeForm";
+import { PrettyLoanMovementForm } from "@/features/pretty-salon/components/forms/PrettyLoanMovementForm";
+import { PrettyTransferForm } from "@/features/pretty-salon/components/forms/PrettyTransferForm";
 import { PrettyLoanMovementsList } from "@/features/pretty-salon/components/loans/PrettyLoanMovementsList";
 import { PrettyCashTransfersTable } from "@/features/pretty-salon/components/shared/PrettyCashTransfersTable";
 import { PrettyClientsTable } from "@/features/pretty-salon/components/shared/PrettyClientsTable";
 import { PrettyTransactionsList } from "@/features/pretty-salon/components/transactions/PrettyTransactionsList";
 import { usePrettySalon } from "@/features/pretty-salon/hooks/usePrettySalon";
-import type {
-  CashTransferFormState,
-  ExpensePaymentFormState,
-  LoanMovementType,
-  LoanMovementFormState,
-  SalonStatus,
-  TransactionFormState,
-  TransactionKind,
-} from "@/features/pretty-salon/types";
-import {
-  formatMonth,
-  isCreditPayment,
-  money,
-} from "@/features/pretty-salon/utils";
+import type { ExpensePaymentFormState } from "@/features/pretty-salon/types";
+import { formatMonth, money } from "@/features/pretty-salon/utils";
 
 function SectionTitle({
   label,
@@ -58,376 +49,6 @@ function SectionTitle({
       <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aeb5bf]">{description}</p>
     </div>
-  );
-}
-
-function TransactionForm({
-  kind,
-  title,
-  description,
-  form,
-  categories,
-  methods,
-  submitLabel,
-  submitting,
-  onChange,
-  onSubmit,
-}: {
-  kind: TransactionKind;
-  title: string;
-  description: string;
-  form: TransactionFormState;
-  categories: readonly string[];
-  methods: readonly string[];
-  submitLabel: string;
-  submitting?: boolean;
-  onChange: <K extends keyof TransactionFormState>(
-    field: K,
-    value: TransactionFormState[K]
-  ) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const creditSelected = isCreditPayment(form.paymentMethod);
-  const statusText =
-    kind === "income"
-      ? creditSelected
-        ? "Credito se guarda como por cobrar."
-        : "Marca por cobrar solo si aun no recibiste el dinero."
-      : creditSelected
-        ? "Tarjeta de credito se guarda como por pagar."
-        : "Marca por pagar solo si aun no salio el dinero.";
-
-  return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-      <h3 className="text-xl font-semibold text-[#f7f9fb]">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">{description}</p>
-
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <label className="block sm:col-span-2">
-          <span className="text-sm text-[#c7ced6]">Concepto</span>
-          <input
-            value={form.concept}
-            onChange={(event) => onChange("concept", event.target.value)}
-            placeholder={kind === "income" ? "Ej. Corte, color, manicure" : "Ej. Tintes, renta, limpieza"}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Monto</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            value={form.amount}
-            onChange={(event) => onChange("amount", event.target.value)}
-            placeholder="0.00"
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Fecha</span>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(event) => onChange("date", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Categoria</span>
-          <select
-            value={form.category}
-            onChange={(event) => onChange("category", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          >
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Metodo</span>
-          <select
-            value={form.paymentMethod}
-            onChange={(event) => onChange("paymentMethod", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          >
-            {methods.map((method) => (
-              <option key={method} value={method}>
-                {method}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">
-            {kind === "income" ? "Estado del cobro" : "Estado del pago"}
-          </span>
-          <select
-            value={form.status}
-            onChange={(event) => onChange("status", event.target.value as SalonStatus)}
-            disabled={creditSelected}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] disabled:cursor-not-allowed disabled:opacity-70 sm:py-2 sm:text-sm"
-          >
-            <option value="paid">{kind === "income" ? "Cobrado" : "Pagado"}</option>
-            <option value="pending">{kind === "income" ? "Por cobrar" : "Por pagar"}</option>
-          </select>
-          <p className={["mt-2 text-xs leading-5", creditSelected ? "text-[#ffe06b]" : "text-[#8f98a5]"].join(" ")}>
-            {statusText}
-          </p>
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">
-            {kind === "income" ? "Cliente" : "Proveedor"}
-          </span>
-          <input
-            value={form.contact}
-            onChange={(event) => onChange("contact", event.target.value)}
-            placeholder="Nombre"
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-
-        <label className="block sm:col-span-2">
-          <span className="text-sm text-[#c7ced6]">Notas</span>
-          <textarea
-            value={form.notes}
-            onChange={(event) => onChange("notes", event.target.value)}
-            rows={3}
-            placeholder="Detalle opcional"
-            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-      </div>
-
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-4 text-base font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60 sm:py-3 sm:text-sm"
-      >
-        {submitting ? "Guardando..." : submitLabel}
-      </button>
-    </form>
-  );
-}
-
-function CashTransferForm({
-  form,
-  submitting,
-  onChange,
-  onSubmit,
-}: {
-  form: CashTransferFormState;
-  submitting?: boolean;
-  onChange: <K extends keyof CashTransferFormState>(
-    field: K,
-    value: CashTransferFormState[K]
-  ) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-      <h3 className="text-xl font-semibold text-[#f7f9fb]">Trasladar dinero</h3>
-      <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
-        Mueve saldo entre efectivo y cuenta banco sin crear ingreso ni gasto.
-      </p>
-
-      <div className="mt-5 grid gap-4">
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Monto</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            value={form.amount}
-            onChange={(event) => onChange("amount", event.target.value)}
-            placeholder="0.00"
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Fecha</span>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(event) => onChange("date", event.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Sale de</span>
-            <select
-              value={form.fromMethod}
-              onChange={(event) => onChange("fromMethod", event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            >
-              {cashMovementMethods.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Entra a</span>
-            <select
-              value={form.toMethod}
-              onChange={(event) => onChange("toMethod", event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            >
-              {cashMovementMethods.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Notas</span>
-          <textarea
-            value={form.notes}
-            onChange={(event) => onChange("notes", event.target.value)}
-            rows={3}
-            placeholder="Ej. Tome efectivo y transferi a la cuenta del salon"
-            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-      </div>
-
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-4 text-base font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60 sm:py-3 sm:text-sm"
-      >
-        {submitting ? "Guardando..." : "Guardar traslado"}
-      </button>
-    </form>
-  );
-}
-
-function LoanMovementForm({
-  form,
-  submitting,
-  onChange,
-  onSubmit,
-}: {
-  form: LoanMovementFormState;
-  submitting?: boolean;
-  onChange: <K extends keyof LoanMovementFormState>(
-    field: K,
-    value: LoanMovementFormState[K]
-  ) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-      <h3 className="text-xl font-semibold text-[#f7f9fb]">Prestado</h3>
-      <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
-        Registra dinero tomado temporalmente o repuesto. Solo ajusta efectivo o cuenta banco.
-      </p>
-
-      <div className="mt-5 grid gap-4">
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Movimiento</span>
-          <select
-            value={form.movementType}
-            onChange={(event) => onChange("movementType", event.target.value as LoanMovementType)}
-            className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          >
-            <option value="borrow">Prestado</option>
-            <option value="repay">Reposicion</option>
-          </select>
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Quien</span>
-            <input
-              value={form.borrower}
-              onChange={(event) => onChange("borrower", event.target.value)}
-              placeholder="Erick o esposa"
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Monto</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={form.amount}
-              onChange={(event) => onChange("amount", event.target.value)}
-              placeholder="0.00"
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Metodo</span>
-            <select
-              value={form.paymentMethod}
-              onChange={(event) => onChange("paymentMethod", event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            >
-              {cashMovementMethods.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Fecha</span>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(event) => onChange("date", event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            />
-          </label>
-        </div>
-
-        <label className="block">
-          <span className="text-sm text-[#c7ced6]">Notas</span>
-          <textarea
-            value={form.notes}
-            onChange={(event) => onChange("notes", event.target.value)}
-            rows={3}
-            placeholder="Ej. Retiro personal temporal"
-            className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-          />
-        </label>
-      </div>
-
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-5 w-full rounded-lg bg-[#00c2a8] px-4 py-4 text-base font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60 sm:py-3 sm:text-sm"
-      >
-        {submitting ? "Guardando..." : "Guardar prestado"}
-      </button>
-    </form>
   );
 }
 
@@ -834,14 +455,10 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "ingresos" ? (
             <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]">
-              <TransactionForm
-                kind="income"
-                title="Registrar ingreso"
-                description="Guarda cobros de servicios, ventas de producto, membresias, paquetes o propinas."
+              <PrettyIncomeForm
                 form={incomeForm}
                 categories={incomeCategories}
                 methods={incomePaymentMethods}
-                submitLabel="Guardar ingreso"
                 submitting={savingKind === "income"}
                 onChange={updateIncomeForm}
                 onSubmit={(event) => addTransaction("income", event)}
@@ -870,14 +487,10 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "gastos" ? (
             <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]">
-              <TransactionForm
-                kind="expense"
-                title="Registrar gasto"
-                description="Controla insumos, nomina, renta, servicios basicos, marketing, limpieza y equipo."
+              <PrettyExpenseForm
                 form={expenseForm}
                 categories={expenseCategories}
                 methods={expensePaymentMethods}
-                submitLabel="Guardar gasto"
                 submitting={savingKind === "expense"}
                 onChange={updateExpenseForm}
                 onSubmit={(event) => addTransaction("expense", event)}
@@ -1018,7 +631,7 @@ export default function PrettyEscritorioPage() {
                 </div>
 
                 <div ref={cashTransferFormRef} className="scroll-mt-4">
-                  <CashTransferForm
+                  <PrettyTransferForm
                     form={cashTransferForm}
                     submitting={savingCashTransfer}
                     onChange={updateCashTransferForm}
@@ -1026,7 +639,7 @@ export default function PrettyEscritorioPage() {
                   />
                 </div>
                 <div ref={loanMovementFormRef} className="scroll-mt-4">
-                  <LoanMovementForm
+                  <PrettyLoanMovementForm
                     form={loanMovementForm}
                     submitting={savingLoanMovement}
                     onChange={updateLoanMovementForm}
