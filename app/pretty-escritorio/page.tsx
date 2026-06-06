@@ -16,13 +16,23 @@ import {
   incomeCategories,
   incomePaymentMethods,
   mobileNavItems,
-  salonCashTransferSelect,
-  salonExpensePaymentSelect,
-  salonLoanMovementSelect,
-  salonTransactionSelect,
   sectionItems,
   serviceCatalog,
 } from "@/features/pretty-salon/constants";
+import {
+  collectPrettySalonPendingIncome,
+  countPrettySalonTransactions,
+  createPrettySalonCashTransfer,
+  createPrettySalonExpensePayment,
+  createPrettySalonLoanMovement,
+  createPrettySalonTransaction,
+  deletePrettySalonCashTransfer,
+  deletePrettySalonExpensePayment,
+  deletePrettySalonLoanMovement,
+  deletePrettySalonTransaction,
+  getPrettySalonData,
+  insertPrettySalonTransactions,
+} from "@/features/pretty-salon/services/prettySalonService";
 import type {
   BreakdownItem,
   CashTransferFormState,
@@ -818,28 +828,7 @@ export default function PrettyEscritorioPage() {
         transfersResult,
         expensePaymentsResult,
         loanMovementsResult,
-      ] = await Promise.all([
-        supabase
-          .from("pretty_salon_transactions")
-          .select(salonTransactionSelect)
-          .order("transaction_date", { ascending: false })
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("pretty_salon_cash_transfers")
-          .select(salonCashTransferSelect)
-          .order("transfer_date", { ascending: false })
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("pretty_salon_expense_payments")
-          .select(salonExpensePaymentSelect)
-          .order("payment_date", { ascending: false })
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("pretty_salon_loan_movements")
-          .select(salonLoanMovementSelect)
-          .order("movement_date", { ascending: false })
-          .order("created_at", { ascending: false }),
-      ]);
+      ] = await getPrettySalonData(supabase);
 
       setLoadingData(false);
 
@@ -888,9 +877,7 @@ export default function PrettyEscritorioPage() {
       const legacyTransactions = loadLegacyTransactions(currentUserId);
       if (legacyTransactions.length === 0) return;
 
-      const { count, error: countError } = await supabase
-        .from("pretty_salon_transactions")
-        .select("id", { count: "exact", head: true });
+      const { count, error: countError } = await countPrettySalonTransactions(supabase);
 
       if (countError) {
         setMigrationNotice(
@@ -920,7 +907,7 @@ export default function PrettyEscritorioPage() {
         })
       );
 
-      const { error } = await supabase.from("pretty_salon_transactions").insert(payload);
+      const { error } = await insertPrettySalonTransactions(supabase, payload);
 
       if (error) {
         setMigrationNotice(
@@ -1143,11 +1130,10 @@ export default function PrettyEscritorioPage() {
 
     setSavingKind(kind);
 
-    const { data, error } = await supabase
-      .from("pretty_salon_transactions")
-      .insert(toTransactionInsert(userId, next))
-      .select(salonTransactionSelect)
-      .single();
+    const { data, error } = await createPrettySalonTransaction(
+      supabase,
+      toTransactionInsert(userId, next)
+    );
 
     setSavingKind(null);
 
@@ -1201,11 +1187,10 @@ export default function PrettyEscritorioPage() {
 
     setSavingCashTransfer(true);
 
-    const { data, error } = await supabase
-      .from("pretty_salon_cash_transfers")
-      .insert(toCashTransferInsert(userId, next))
-      .select(salonCashTransferSelect)
-      .single();
+    const { data, error } = await createPrettySalonCashTransfer(
+      supabase,
+      toCashTransferInsert(userId, next)
+    );
 
     setSavingCashTransfer(false);
 
@@ -1254,11 +1239,10 @@ export default function PrettyEscritorioPage() {
 
     setSavingExpensePayment(true);
 
-    const { data, error } = await supabase
-      .from("pretty_salon_expense_payments")
-      .insert(toExpensePaymentInsert(userId, next))
-      .select(salonExpensePaymentSelect)
-      .single();
+    const { data, error } = await createPrettySalonExpensePayment(
+      supabase,
+      toExpensePaymentInsert(userId, next)
+    );
 
     setSavingExpensePayment(false);
 
@@ -1310,11 +1294,10 @@ export default function PrettyEscritorioPage() {
 
     setSavingLoanMovement(true);
 
-    const { data, error } = await supabase
-      .from("pretty_salon_loan_movements")
-      .insert(toLoanMovementInsert(userId, next))
-      .select(salonLoanMovementSelect)
-      .single();
+    const { data, error } = await createPrettySalonLoanMovement(
+      supabase,
+      toLoanMovementInsert(userId, next)
+    );
 
     setSavingLoanMovement(false);
 
@@ -1341,10 +1324,7 @@ export default function PrettyEscritorioPage() {
 
     setDeletingId(id);
 
-    const { error } = await supabase
-      .from("pretty_salon_transactions")
-      .delete()
-      .eq("id", id);
+    const { error } = await deletePrettySalonTransaction(supabase, id);
 
     setDeletingId(null);
 
@@ -1361,10 +1341,7 @@ export default function PrettyEscritorioPage() {
 
     setDeletingCashTransferId(id);
 
-    const { error } = await supabase
-      .from("pretty_salon_cash_transfers")
-      .delete()
-      .eq("id", id);
+    const { error } = await deletePrettySalonCashTransfer(supabase, id);
 
     setDeletingCashTransferId(null);
 
@@ -1381,10 +1358,7 @@ export default function PrettyEscritorioPage() {
 
     setDeletingExpensePaymentId(id);
 
-    const { error } = await supabase
-      .from("pretty_salon_expense_payments")
-      .delete()
-      .eq("id", id);
+    const { error } = await deletePrettySalonExpensePayment(supabase, id);
 
     setDeletingExpensePaymentId(null);
 
@@ -1401,10 +1375,7 @@ export default function PrettyEscritorioPage() {
 
     setDeletingLoanMovementId(id);
 
-    const { error } = await supabase
-      .from("pretty_salon_loan_movements")
-      .delete()
-      .eq("id", id);
+    const { error } = await deletePrettySalonLoanMovement(supabase, id);
 
     setDeletingLoanMovementId(null);
 
@@ -1437,16 +1408,12 @@ export default function PrettyEscritorioPage() {
 
     setCollectingId(collectionTarget.id);
 
-    const { data, error } = await supabase
-      .from("pretty_salon_transactions")
-      .update({
-        payment_method: normalizeCashMethod(collectionMethod),
-        status: "paid",
-        notes: nextNotes,
-      })
-      .eq("id", collectionTarget.id)
-      .select(salonTransactionSelect)
-      .single();
+    const { data, error } = await collectPrettySalonPendingIncome(
+      supabase,
+      collectionTarget.id,
+      normalizeCashMethod(collectionMethod),
+      nextNotes
+    );
 
     setCollectingId(null);
 
