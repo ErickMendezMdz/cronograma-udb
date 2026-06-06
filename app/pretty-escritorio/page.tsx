@@ -14,6 +14,11 @@ import {
   sectionItems,
   serviceCatalog,
 } from "@/features/pretty-salon/constants";
+import { PrettyBalanceCard } from "@/features/pretty-salon/components/dashboard/PrettyBalanceCard";
+import { PrettyDashboardHeader } from "@/features/pretty-salon/components/dashboard/PrettyDashboardHeader";
+import { PrettyMetricCard } from "@/features/pretty-salon/components/dashboard/PrettyMetricCard";
+import { PrettyQuickActions } from "@/features/pretty-salon/components/dashboard/PrettyQuickActions";
+import { PrettySectionTabs } from "@/features/pretty-salon/components/dashboard/PrettySectionTabs";
 import { usePrettySalon } from "@/features/pretty-salon/hooks/usePrettySalon";
 import type {
   BreakdownItem,
@@ -29,35 +34,11 @@ import type {
 import {
   formatDate,
   formatMonth,
-  formatSignedMoney,
   getStatusLabel,
   isCreditPayment,
   isDonationPayment,
   money,
 } from "@/features/pretty-salon/utils";
-
-function MetricCard({
-  label,
-  value,
-  detail,
-  accent,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  accent: string;
-}) {
-  return (
-    <article className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-lg shadow-black/15">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm text-[#a9b0ba]">{label}</p>
-        <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: accent }} />
-      </div>
-      <p className="mt-4 break-words text-2xl font-semibold text-[#f7f9fb] sm:text-3xl">{value}</p>
-      <p className="mt-2 text-sm text-[#a9b0ba]">{detail}</p>
-    </article>
-  );
-}
 
 function SectionTitle({
   label,
@@ -856,27 +837,11 @@ export default function PrettyEscritorioPage() {
             }}
           />
 
-          <nav className="mt-5 hidden gap-2 lg:grid">
-            {sectionItems.map((item) => {
-              const isActive = activeSection === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  className={[
-                    "min-w-[128px] rounded-lg border px-3 py-3 text-left transition lg:min-w-0",
-                    isActive
-                      ? "border-[#00c2a8] bg-[#0f312e] text-[#f7f9fb]"
-                      : "border-[#30333a] bg-[#181a1e] text-[#d8dde3] hover:border-[#70d6ff]",
-                  ].join(" ")}
-                >
-                  <span className="block text-sm font-semibold">{item.label}</span>
-                  <span className="mt-1 block text-xs text-[#aeb5bf]">{item.detail}</span>
-                </button>
-              );
-            })}
-          </nav>
+          <PrettySectionTabs
+            items={sectionItems}
+            activeSection={activeSection}
+            onChange={setActiveSection}
+          />
 
           <div className="mt-5 hidden rounded-lg border border-[#30333a] bg-[#181a1e] p-4 lg:block">
             <p className="text-sm font-semibold text-[#f7f9fb]">Sesion activa</p>
@@ -891,31 +856,12 @@ export default function PrettyEscritorioPage() {
         </aside>
 
         <main className="min-w-0 pb-28 pl-4 pr-4 pt-4 sm:p-6 sm:pb-28 lg:p-8">
-          <header className="flex min-w-0 flex-col gap-4 border-b border-[#30333a] pb-5 xl:flex-row xl:items-end xl:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[#00c2a8]">Pretty Salon de belleza</p>
-              <h1 className="mt-2 max-w-full text-3xl font-semibold leading-tight text-[#f7f9fb] sm:text-5xl">
-                Dashboard financiero
-              </h1>
-            </div>
-
-            <div className="grid min-w-0 gap-3 sm:flex sm:items-center">
-              <label className="block min-w-0">
-                <span className="text-sm text-[#aeb5bf]">Mes de trabajo</span>
-                <select
-                  value={selectedMonth}
-                  onChange={(event) => setSelectedMonth(event.target.value)}
-                  className="mt-2 w-full max-w-full rounded-lg border border-[#3a3f48] bg-[#181a1e] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:w-56 sm:py-2 sm:text-sm"
-                >
-                  {monthOptions.map((month) => (
-                    <option key={month} value={month}>
-                      {formatMonth(month)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </header>
+          <PrettyDashboardHeader
+            selectedMonth={selectedMonth}
+            monthOptions={monthOptions}
+            formatMonth={formatMonth}
+            onMonthChange={setSelectedMonth}
+          />
 
           {loadingData ? (
             <div className="mt-5 rounded-lg border border-[#30333a] bg-[#181a1e] px-4 py-3 text-sm text-[#aeb5bf]">
@@ -945,76 +891,37 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "dashboard" ? (
-            <section
-              ref={quickAccessRef}
-              className="mt-6 min-w-0 scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4"
-            >
-              <SectionTitle
-                label="Accesos rapidos"
-                title="Registrar movimiento"
-                description="Entradas directas para las acciones mas usadas en caja."
-              />
-              <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <button
-                  onClick={() => openIncomeForm("Efectivo")}
-                  className="min-w-0 rounded-lg border border-[#00c2a8] bg-[#0f312e] px-4 py-4 text-left transition hover:bg-[#123b37]"
-                >
-                  <span className="block text-base font-semibold text-[#71f2d8]">Ingreso</span>
-                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar ingreso</span>
-                </button>
-                <button
-                  onClick={openExpenseForm}
-                  className="min-w-0 rounded-lg border border-[#ff5f7e] bg-[#321820] px-4 py-4 text-left transition hover:bg-[#3f1d27]"
-                >
-                  <span className="block text-base font-semibold text-[#ff8aa1]">Gastos</span>
-                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar gasto</span>
-                </button>
-                <button
-                  onClick={() => openCashAction("transfer")}
-                  className="min-w-0 rounded-lg border border-[#70d6ff] bg-[#132936] px-4 py-4 text-left transition hover:bg-[#173344]"
-                >
-                  <span className="block text-base font-semibold text-[#70d6ff]">Traslado</span>
-                  <span className="mt-1 block text-xs text-[#aeb5bf]">Mover efectivo o banco</span>
-                </button>
-                <button
-                  onClick={() => openCashAction("loan")}
-                  className="min-w-0 rounded-lg border border-[#f7d84a] bg-[#302a12] px-4 py-4 text-left transition hover:bg-[#3b3315]"
-                >
-                  <span className="block text-base font-semibold text-[#ffe06b]">Prestado</span>
-                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar dinero tomado</span>
-                </button>
-                <button
-                  onClick={openExpensePaymentDialog}
-                  disabled={totalPendingExpenses <= 0}
-                  className="min-w-0 rounded-lg border border-[#b8f060] bg-[#20311f] px-4 py-4 text-left transition hover:bg-[#273b25] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="block text-base font-semibold text-[#d8ff94]">Abono</span>
-                  <span className="mt-1 block text-xs text-[#aeb5bf]">Registrar abono</span>
-                </button>
-              </div>
-            </section>
+            <PrettyQuickActions
+              quickAccessRef={quickAccessRef}
+              totalPendingExpenses={totalPendingExpenses}
+              onIncome={() => openIncomeForm("Efectivo")}
+              onExpense={openExpenseForm}
+              onTransfer={() => openCashAction("transfer")}
+              onLoan={() => openCashAction("loan")}
+              onExpensePayment={openExpensePaymentDialog}
+            />
           ) : null}
 
           <section className="mt-6 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
+            <PrettyMetricCard
               label="Utilidad real"
               value={money.format(netProfit)}
               detail={`${margin.toFixed(1)}% de margen`}
               accent="#f7d84a"
             />
-            <MetricCard
+            <PrettyMetricCard
               label="Gastos pagados"
               value={money.format(paidExpenses)}
               detail={`${money.format(pendingExpenses)} por pagar`}
               accent="#ff5f7e"
             />
-            <MetricCard
+            <PrettyMetricCard
               label="Ingresos cobrados"
               value={money.format(paidIncome)}
               detail={`${money.format(pendingIncome)} por cobrar`}
               accent="#00c2a8"
             />
-            <MetricCard
+            <PrettyMetricCard
               label="Por pagar"
               value={money.format(totalPendingExpenses)}
               detail="Deuda pendiente"
@@ -1220,72 +1127,7 @@ export default function PrettyEscritorioPage() {
                   ) : (
                     <div className="mt-5 grid min-w-0 gap-3 md:grid-cols-2">
                       {paymentBreakdown.map((item) => (
-                        <article
-                          key={item.method}
-                          className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4"
-                        >
-                          <div className="flex min-w-0 items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-base font-semibold text-[#f7f9fb]">
-                                {item.method}
-                              </p>
-                              <p className="mt-1 text-xs text-[#8f98a5]">Metodo de caja</p>
-                            </div>
-                            <p
-                              className={[
-                                "shrink-0 text-right text-xl font-semibold",
-                                item.balance < 0 ? "text-[#ff8aa1]" : "text-[#f7f9fb]",
-                              ].join(" ")}
-                            >
-                              {money.format(item.balance)}
-                            </p>
-                          </div>
-
-                          <div className="mt-4 grid gap-2 text-sm">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[#aeb5bf]">Ingresos</span>
-                              <span className="font-semibold text-[#71f2d8]">
-                                {money.format(item.income)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[#aeb5bf]">Gastos</span>
-                              <span className="font-semibold text-[#ff8aa1]">
-                                {money.format(item.expense)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[#aeb5bf]">Traslados</span>
-                              <span
-                                className={[
-                                  "font-semibold",
-                                  item.transferNet > 0
-                                    ? "text-[#71f2d8]"
-                                    : item.transferNet < 0
-                                      ? "text-[#ff8aa1]"
-                                      : "text-[#aeb5bf]",
-                                ].join(" ")}
-                              >
-                                {formatSignedMoney(item.transferNet)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[#aeb5bf]">Prestado</span>
-                              <span
-                                className={[
-                                  "font-semibold",
-                                  item.loanNet > 0
-                                    ? "text-[#71f2d8]"
-                                    : item.loanNet < 0
-                                      ? "text-[#ff8aa1]"
-                                      : "text-[#aeb5bf]",
-                                ].join(" ")}
-                              >
-                                {formatSignedMoney(item.loanNet)}
-                              </span>
-                            </div>
-                          </div>
-                        </article>
+                        <PrettyBalanceCard key={item.method} item={item} />
                       ))}
                     </div>
                   )}
