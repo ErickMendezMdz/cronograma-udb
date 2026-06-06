@@ -14,14 +14,16 @@ import {
   sectionItems,
   serviceCatalog,
 } from "@/features/pretty-salon/constants";
-import { PrettyBalanceCard } from "@/features/pretty-salon/components/dashboard/PrettyBalanceCard";
 import { PrettyDashboardHeader } from "@/features/pretty-salon/components/dashboard/PrettyDashboardHeader";
 import { PrettyMetricCard } from "@/features/pretty-salon/components/dashboard/PrettyMetricCard";
 import { PrettyQuickActions } from "@/features/pretty-salon/components/dashboard/PrettyQuickActions";
 import { PrettySectionTabs } from "@/features/pretty-salon/components/dashboard/PrettySectionTabs";
+import { PrettyCategoryBreakdown } from "@/features/pretty-salon/components/reports/PrettyCategoryBreakdown";
+import { PrettyDailyTrend } from "@/features/pretty-salon/components/reports/PrettyDailyTrend";
+import { PrettyPaymentMethodBreakdown } from "@/features/pretty-salon/components/reports/PrettyPaymentMethodBreakdown";
+import { PrettyReportsSection } from "@/features/pretty-salon/components/reports/PrettyReportsSection";
 import { usePrettySalon } from "@/features/pretty-salon/hooks/usePrettySalon";
 import type {
-  BreakdownItem,
   CashTransferFormState,
   ExpensePaymentFormState,
   LoanMovementType,
@@ -54,37 +56,6 @@ function SectionTitle({
       <p className="text-sm font-semibold text-[#00c2a8]">{label}</p>
       <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aeb5bf]">{description}</p>
-    </div>
-  );
-}
-
-function BreakdownList({
-  items,
-  emptyMessage,
-}: {
-  items: BreakdownItem[];
-  emptyMessage: string;
-}) {
-  if (items.length === 0) {
-    return <p className="text-sm text-[#aeb5bf]">{emptyMessage}</p>;
-  }
-
-  return (
-    <div className="space-y-4">
-      {items.map((item) => (
-        <div key={item.label}>
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-[#eef2f4]">{item.label}</span>
-            <span className="font-semibold text-[#f7f9fb]">{money.format(item.value)}</span>
-          </div>
-          <div className="mt-2 h-2 rounded-md bg-[#2a2d33]">
-            <div
-              className="h-full rounded-md"
-              style={{ width: `${Math.max(item.share, 4)}%`, backgroundColor: item.color }}
-            />
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -933,51 +904,7 @@ export default function PrettyEscritorioPage() {
 
           {activeSection === "dashboard" ? (
             <>
-              <section className="mt-6 grid min-w-0 gap-4">
-                <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                  <SectionTitle
-                    label="Vista principal"
-                    title="Ingresos contra gastos"
-                    description="Comparativo de los ultimos dias con movimientos pagados."
-                  />
-
-                  <div className="mt-6 flex h-44 min-w-0 items-end gap-1 border-b border-[#30333a] px-1 pb-3 sm:h-64 sm:gap-2">
-                    {dailyTrend.map((item) => {
-                      const incomeHeight = item.income > 0 ? Math.max((item.income / trendMax) * 100, 6) : 0;
-                      const expenseHeight = item.expense > 0 ? Math.max((item.expense / trendMax) * 100, 6) : 0;
-
-                      return (
-                        <div key={item.date} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                          <div className="flex h-32 w-full items-end justify-center gap-1 sm:h-48">
-                            <div
-                              title={`Ingresos ${money.format(item.income)}`}
-                              className="w-3 rounded-sm bg-[#00c2a8]"
-                              style={{ height: `${incomeHeight}%` }}
-                            />
-                            <div
-                              title={`Gastos ${money.format(item.expense)}`}
-                              className="w-3 rounded-sm bg-[#ff5f7e]"
-                              style={{ height: `${expenseHeight}%` }}
-                            />
-                          </div>
-                          <span className="truncate text-xs text-[#aeb5bf]">{item.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-[#c7ced6]">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-sm bg-[#00c2a8]" />
-                      Ingresos
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-sm bg-[#ff5f7e]" />
-                      Gastos
-                    </span>
-                  </div>
-                </div>
-              </section>
+              <PrettyDailyTrend dailyTrend={dailyTrend} trendMax={trendMax} />
 
               <section className="mt-6 grid min-w-0 gap-4 xl:grid-cols-2">
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
@@ -987,7 +914,7 @@ export default function PrettyEscritorioPage() {
                     description="Lo que mas esta aportando al salon."
                   />
                   <div className="mt-5">
-                    <BreakdownList
+                    <PrettyCategoryBreakdown
                       items={incomeBreakdown}
                       emptyMessage="Aun no hay ingresos cobrados en este mes."
                     />
@@ -1001,7 +928,7 @@ export default function PrettyEscritorioPage() {
                     description="Categorias que estan consumiendo caja."
                   />
                   <div className="mt-5">
-                    <BreakdownList
+                    <PrettyCategoryBreakdown
                       items={expenseBreakdown}
                       emptyMessage="Aun no hay gastos pagados en este mes."
                     />
@@ -1120,17 +1047,7 @@ export default function PrettyEscritorioPage() {
                     title="Saldos en caja"
                     description="Ingresos menos gastos pagados, ajustado por traslados internos del mes."
                   />
-                  {paymentBreakdown.length === 0 ? (
-                    <div className="mt-5 rounded-lg border border-dashed border-[#3a3f48] p-6 text-sm text-[#aeb5bf]">
-                      Aun no hay movimientos de caja para este mes.
-                    </div>
-                  ) : (
-                    <div className="mt-5 grid min-w-0 gap-3 md:grid-cols-2">
-                      {paymentBreakdown.map((item) => (
-                        <PrettyBalanceCard key={item.method} item={item} />
-                      ))}
-                    </div>
-                  )}
+                  <PrettyPaymentMethodBreakdown items={paymentBreakdown} />
                 </div>
 
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
@@ -1502,99 +1419,15 @@ export default function PrettyEscritorioPage() {
           ) : null}
 
           {activeSection === "reportes" ? (
-            <section className="mt-6 grid min-w-0 gap-4">
-              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                <SectionTitle
-                  label="Reportes"
-                  title="Resumen mensual"
-                  description="Lectura rapida de ingresos, gastos, pendientes y margen por mes."
-                />
-                <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                  <table className="min-w-[760px] w-full text-left text-sm">
-                    <thead className="bg-[#111316] text-[#aeb5bf]">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Mes</th>
-                        <th className="px-4 py-3 text-right font-medium">Ingresos</th>
-                        <th className="px-4 py-3 text-right font-medium">Gastos</th>
-                        <th className="px-4 py-3 text-right font-medium">Utilidad</th>
-                        <th className="px-4 py-3 text-right font-medium">Pendientes</th>
-                        <th className="px-4 py-3 text-right font-medium">Margen</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#30333a]">
-                      {monthlyReports.map((report) => (
-                        <tr key={report.month}>
-                          <td className="px-4 py-4 font-medium text-[#f7f9fb]">
-                            {formatMonth(report.month)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-[#71f2d8]">
-                            {money.format(report.income)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-[#ff8aa1]">
-                            {money.format(report.expenses)}
-                          </td>
-                          <td className="px-4 py-4 text-right font-semibold text-[#f7f9fb]">
-                            {money.format(report.profit)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-[#ffe06b]">
-                            {money.format(report.pending)}
-                          </td>
-                          <td className="px-4 py-4 text-right text-[#70d6ff]">
-                            {report.margin.toFixed(1)}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
-                <SectionTitle
-                  label={formatMonth(selectedMonth)}
-                  title="Detalle por categoria"
-                  description="Montos del mes seleccionado para revisar gastos, prestamos y pendientes."
-                />
-                <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
-                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
-                    <h3 className="text-base font-semibold text-[#f7f9fb]">Gastos pagados</h3>
-                    <div className="mt-4">
-                      <BreakdownList
-                        items={expenseBreakdown}
-                        emptyMessage="No hay gastos pagados por categoria en este mes."
-                      />
-                    </div>
-                  </div>
-                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
-                    <h3 className="text-base font-semibold text-[#f7f9fb]">Prestado pendiente</h3>
-                    <div className="mt-4">
-                      <BreakdownList
-                        items={loanBreakdown}
-                        emptyMessage="No hay dinero prestado pendiente en este mes."
-                      />
-                    </div>
-                  </div>
-                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
-                    <h3 className="text-base font-semibold text-[#f7f9fb]">Por pagar</h3>
-                    <div className="mt-4">
-                      <BreakdownList
-                        items={pendingExpenseBreakdown}
-                        emptyMessage="No hay gastos por pagar en este mes."
-                      />
-                    </div>
-                  </div>
-                  <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
-                    <h3 className="text-base font-semibold text-[#f7f9fb]">Por cobrar</h3>
-                    <div className="mt-4">
-                      <BreakdownList
-                        items={pendingIncomeBreakdown}
-                        emptyMessage="No hay ingresos por cobrar en este mes."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <PrettyReportsSection
+              reports={monthlyReports}
+              selectedMonthLabel={formatMonth(selectedMonth)}
+              expenseBreakdown={expenseBreakdown}
+              loanBreakdown={loanBreakdown}
+              pendingExpenseBreakdown={pendingExpenseBreakdown}
+              pendingIncomeBreakdown={pendingIncomeBreakdown}
+              formatMonth={formatMonth}
+            />
           ) : null}
         </main>
       </div>

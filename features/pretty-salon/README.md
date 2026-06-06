@@ -2,7 +2,7 @@
 
 This folder prepares the gradual modularization of `/pretty-escritorio`.
 
-Current phase: shared domain pieces, Supabase access, the main stateful orchestration, and small presentational dashboard components are extracted. The page still owns larger visual sections while deeper component splits are pending.
+Current phase: shared domain pieces, Supabase access, the main stateful orchestration, and small presentational dashboard/report components are extracted. The page still owns larger visual sections while deeper component splits are pending.
 
 ## Proposed structure
 
@@ -15,7 +15,7 @@ Current phase: shared domain pieces, Supabase access, the main stateful orchestr
 - `components/transactions/`: income/expense forms, transaction tables, collection flows.
 - `components/expenses/`: expense payment dialog, pending expense allocation, settlement views.
 - `components/loans/`: loan movement form, loan balances, borrower views.
-- `components/reports/`: monthly report tables and summaries.
+- `components/reports/`: presentational daily trend, category breakdowns, payment method breakdowns, monthly report tables, and report summaries.
 - `components/team/`: future team/member access UI if needed.
 - `components/shared/`: local shared cards, section titles, breakdown lists, dialogs, and table primitives specific to Pretty Salon.
 
