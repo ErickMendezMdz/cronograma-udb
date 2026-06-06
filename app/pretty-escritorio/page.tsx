@@ -22,6 +22,11 @@ import { PrettyCategoryBreakdown } from "@/features/pretty-salon/components/repo
 import { PrettyDailyTrend } from "@/features/pretty-salon/components/reports/PrettyDailyTrend";
 import { PrettyPaymentMethodBreakdown } from "@/features/pretty-salon/components/reports/PrettyPaymentMethodBreakdown";
 import { PrettyReportsSection } from "@/features/pretty-salon/components/reports/PrettyReportsSection";
+import { PrettyExpensePaymentsTable } from "@/features/pretty-salon/components/expenses/PrettyExpensePaymentsTable";
+import { PrettyLoanMovementsList } from "@/features/pretty-salon/components/loans/PrettyLoanMovementsList";
+import { PrettyCashTransfersTable } from "@/features/pretty-salon/components/shared/PrettyCashTransfersTable";
+import { PrettyClientsTable } from "@/features/pretty-salon/components/shared/PrettyClientsTable";
+import { PrettyTransactionsList } from "@/features/pretty-salon/components/transactions/PrettyTransactionsList";
 import { usePrettySalon } from "@/features/pretty-salon/hooks/usePrettySalon";
 import type {
   CashTransferFormState,
@@ -29,16 +34,12 @@ import type {
   LoanMovementType,
   LoanMovementFormState,
   SalonStatus,
-  SalonTransaction,
   TransactionFormState,
   TransactionKind,
 } from "@/features/pretty-salon/types";
 import {
-  formatDate,
   formatMonth,
-  getStatusLabel,
   isCreditPayment,
-  isDonationPayment,
   money,
 } from "@/features/pretty-salon/utils";
 
@@ -56,141 +57,6 @@ function SectionTitle({
       <p className="text-sm font-semibold text-[#00c2a8]">{label}</p>
       <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aeb5bf]">{description}</p>
-    </div>
-  );
-}
-
-function TransactionTable({
-  transactions,
-  emptyMessage,
-  onDelete,
-  onCollect,
-  onPayExpense,
-  expensePaidAmounts,
-  deletingId,
-  collectingId,
-}: {
-  transactions: SalonTransaction[];
-  emptyMessage: string;
-  onDelete: (id: string) => void | Promise<void>;
-  onCollect: (transaction: SalonTransaction) => void;
-  onPayExpense: () => void;
-  expensePaidAmounts?: Map<string, number>;
-  deletingId?: string | null;
-  collectingId?: string | null;
-}) {
-  if (transactions.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-[#3a3f48] p-6 text-sm text-[#aeb5bf]">
-        {emptyMessage}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-3 lg:grid-cols-2">
-        {transactions.map((item) => {
-          const canCollect = item.kind === "income" && item.status === "pending";
-          const expensePaidAmount = item.kind === "expense" ? (expensePaidAmounts?.get(item.id) ?? 0) : 0;
-          const expensePendingAmount = Math.max(item.amount - expensePaidAmount, 0);
-          const canPayExpense = item.kind === "expense" && item.status === "pending" && expensePendingAmount > 0;
-          const isExpensePaid = item.kind === "expense" && item.status === "pending" && expensePendingAmount <= 0;
-          const isExpensePartial = item.kind === "expense" && expensePaidAmount > 0 && expensePendingAmount > 0;
-          const isCollecting = collectingId === item.id;
-          const isDeleting = deletingId === item.id;
-
-          return (
-            <article key={item.id} className="min-w-0 rounded-lg border border-[#30333a] bg-[#101113] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="break-words text-base font-semibold text-[#f7f9fb]">{item.concept}</p>
-                  <p className="mt-1 text-xs text-[#aeb5bf]">
-                    {formatDate(item.date)} · {item.category}
-                  </p>
-                </div>
-                <p
-                  className={[
-                    "shrink-0 text-right text-lg font-semibold tabular-nums",
-                    item.kind === "income" ? "text-[#71f2d8]" : "text-[#ff8aa1]",
-                  ].join(" ")}
-                >
-                  {item.kind === "income" ? "+" : "-"}
-                  {money.format(item.amount)}
-                </p>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-[#181a1e] px-3 py-2">
-                  <p className="text-[#8f98a5]">Contacto</p>
-                  <p className="mt-1 truncate text-[#d8dde3]">{item.contact || "Sin contacto"}</p>
-                </div>
-                <div className="rounded-md bg-[#181a1e] px-3 py-2">
-                  <p className="text-[#8f98a5]">Metodo</p>
-                  <p className="mt-1 truncate text-[#d8dde3]">{item.paymentMethod}</p>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <span
-                  className={[
-                    "inline-flex rounded-md px-2 py-1 text-xs font-semibold",
-                    item.status === "paid" || isExpensePaid
-                      ? "bg-[#0f3b33] text-[#71f2d8]"
-                      : isExpensePartial
-                        ? "bg-[#193347] text-[#70d6ff]"
-                        : "bg-[#403611] text-[#ffe06b]",
-                  ].join(" ")}
-                >
-                  {isExpensePartial
-                    ? "Abonado"
-                    : isExpensePaid
-                      ? "Pagado"
-                      : getStatusLabel(item.status, item.kind)}
-                </span>
-                <div className="ml-auto flex flex-wrap justify-end gap-2">
-                  {canCollect ? (
-                    <button
-                      onClick={() => onCollect(item)}
-                      disabled={isCollecting || isDeleting}
-                      className="rounded-md border border-[#00c2a8] px-3 py-2 text-xs font-semibold text-[#71f2d8] transition hover:bg-[#0f312e] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isCollecting ? "Cobrando..." : "Cobrar"}
-                    </button>
-                  ) : null}
-                  {canPayExpense ? (
-                    <button
-                      onClick={onPayExpense}
-                      disabled={isDeleting}
-                      className="rounded-md border border-[#70d6ff] px-3 py-2 text-xs font-semibold text-[#70d6ff] transition hover:bg-[#132936] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Abonar
-                    </button>
-                  ) : null}
-                  <button
-                    onClick={() => onDelete(item.id)}
-                    disabled={isDeleting || isCollecting}
-                    className="rounded-md border border-[#454b55] px-3 py-2 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isDeleting ? "Eliminando..." : "Eliminar"}
-                  </button>
-                </div>
-              </div>
-
-              {isExpensePartial ? (
-                <p className="mt-3 text-xs leading-5 text-[#aeb5bf]">
-                  Abonado {money.format(expensePaidAmount)} de {money.format(item.amount)}.
-                  Pendiente {money.format(expensePendingAmount)}.
-                </p>
-              ) : null}
-
-              {item.notes ? (
-                <p className="mt-3 whitespace-pre-line text-xs leading-5 text-[#aeb5bf]">
-                  {item.notes}
-                </p>
-              ) : null}
-            </article>
-          );
-        })}
     </div>
   );
 }
@@ -951,7 +817,7 @@ export default function PrettyEscritorioPage() {
                   </button>
                 </div>
                 <div className="mt-5">
-                  <TransactionTable
+                  <PrettyTransactionsList
                     transactions={sortedTransactions.slice(0, 6)}
                     emptyMessage="Todavia no hay movimientos."
                     onDelete={deleteTransaction}
@@ -987,7 +853,7 @@ export default function PrettyEscritorioPage() {
                   description="Movimientos positivos del salon, pagados o pendientes."
                 />
                 <div className="mt-5">
-                  <TransactionTable
+                  <PrettyTransactionsList
                     transactions={sortedTransactions.filter((item) => item.kind === "income")}
                     emptyMessage="No hay ingresos registrados."
                     onDelete={deleteTransaction}
@@ -1023,7 +889,7 @@ export default function PrettyEscritorioPage() {
                   description="Costos operativos del salon, pagados o pendientes."
                 />
                 <div className="mt-5">
-                  <TransactionTable
+                  <PrettyTransactionsList
                     transactions={sortedTransactions.filter((item) => item.kind === "expense")}
                     emptyMessage="No hay gastos registrados."
                     onDelete={deleteTransaction}
@@ -1056,52 +922,11 @@ export default function PrettyEscritorioPage() {
                     title="Movimientos internos"
                     description="Cambios entre metodos que no alteran ingresos, gastos ni utilidad."
                   />
-                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                    <table className="min-w-[720px] w-full text-left text-sm">
-                      <thead className="bg-[#111316] text-[#aeb5bf]">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Fecha</th>
-                          <th className="px-4 py-3 font-medium">Sale de</th>
-                          <th className="px-4 py-3 font-medium">Entra a</th>
-                          <th className="px-4 py-3 text-right font-medium">Monto</th>
-                          <th className="px-4 py-3 font-medium">Notas</th>
-                          <th className="px-4 py-3 text-right font-medium">Accion</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#30333a]">
-                        {monthlyCashTransfers.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="px-4 py-6 text-center text-[#aeb5bf]">
-                              Aun no hay traslados internos en este mes.
-                            </td>
-                          </tr>
-                        ) : (
-                          monthlyCashTransfers.map((item) => (
-                            <tr key={item.id} className="align-top">
-                              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
-                              <td className="px-4 py-4 text-[#ff8aa1]">{item.fromMethod}</td>
-                              <td className="px-4 py-4 text-[#71f2d8]">{item.toMethod}</td>
-                              <td className="px-4 py-4 text-right font-semibold text-[#f7f9fb]">
-                                {money.format(item.amount)}
-                              </td>
-                              <td className="px-4 py-4 text-[#aeb5bf]">
-                                {item.notes || "Sin notas"}
-                              </td>
-                              <td className="px-4 py-4 text-right">
-                                <button
-                                  onClick={() => deleteCashTransfer(item.id)}
-                                  disabled={deletingCashTransferId === item.id}
-                                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {deletingCashTransferId === item.id ? "Eliminando..." : "Eliminar"}
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PrettyCashTransfersTable
+                    transfers={monthlyCashTransfers}
+                    deletingId={deletingCashTransferId}
+                    onDelete={deleteCashTransfer}
+                  />
                 </div>
 
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
@@ -1110,67 +935,11 @@ export default function PrettyEscritorioPage() {
                     title="Dinero pendiente de reponer"
                     description="Retiros temporales y reposiciones. No se cuentan como gasto ni como deuda por pagar."
                   />
-                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                    <table className="min-w-[760px] w-full text-left text-sm">
-                      <thead className="bg-[#111316] text-[#aeb5bf]">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Fecha</th>
-                          <th className="px-4 py-3 font-medium">Movimiento</th>
-                          <th className="px-4 py-3 font-medium">Quien</th>
-                          <th className="px-4 py-3 font-medium">Metodo</th>
-                          <th className="px-4 py-3 text-right font-medium">Monto</th>
-                          <th className="px-4 py-3 font-medium">Notas</th>
-                          <th className="px-4 py-3 text-right font-medium">Accion</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#30333a]">
-                        {monthlyLoanMovements.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="px-4 py-6 text-center text-[#aeb5bf]">
-                              Aun no hay dinero prestado o repuesto en este mes.
-                            </td>
-                          </tr>
-                        ) : (
-                          monthlyLoanMovements.map((item) => (
-                            <tr key={item.id} className="align-top">
-                              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
-                              <td
-                                className={[
-                                  "px-4 py-4 font-semibold",
-                                  item.movementType === "borrow" ? "text-[#ff8aa1]" : "text-[#71f2d8]",
-                                ].join(" ")}
-                              >
-                                {item.movementType === "borrow" ? "Prestado" : "Reposicion"}
-                              </td>
-                              <td className="px-4 py-4 text-[#d8dde3]">{item.borrower || "Sin nombre"}</td>
-                              <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
-                              <td
-                                className={[
-                                  "px-4 py-4 text-right font-semibold",
-                                  item.movementType === "borrow" ? "text-[#ff8aa1]" : "text-[#71f2d8]",
-                                ].join(" ")}
-                              >
-                                {item.movementType === "borrow" ? "-" : "+"}
-                                {money.format(item.amount)}
-                              </td>
-                              <td className="px-4 py-4 text-[#aeb5bf]">
-                                {item.notes || "Sin notas"}
-                              </td>
-                              <td className="px-4 py-4 text-right">
-                                <button
-                                  onClick={() => deleteLoanMovement(item.id)}
-                                  disabled={deletingLoanMovementId === item.id}
-                                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {deletingLoanMovementId === item.id ? "Eliminando..." : "Eliminar"}
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PrettyLoanMovementsList
+                    movements={monthlyLoanMovements}
+                    deletingId={deletingLoanMovementId}
+                    onDelete={deleteLoanMovement}
+                  />
                 </div>
 
                 <div className="min-w-0 rounded-lg border border-[#30333a] bg-[#181a1e] p-4">
@@ -1188,58 +957,11 @@ export default function PrettyEscritorioPage() {
                       Registrar abono
                     </button>
                   </div>
-                  <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                    <table className="min-w-[640px] w-full text-left text-sm">
-                      <thead className="bg-[#111316] text-[#aeb5bf]">
-                        <tr>
-                          <th className="px-4 py-3 font-medium">Fecha</th>
-                          <th className="px-4 py-3 font-medium">Metodo</th>
-                          <th className="px-4 py-3 text-right font-medium">Monto</th>
-                          <th className="px-4 py-3 font-medium">Notas</th>
-                          <th className="px-4 py-3 text-right font-medium">Accion</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#30333a]">
-                        {monthlyExpensePayments.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="px-4 py-6 text-center text-[#aeb5bf]">
-                              Aun no hay abonos o donaciones en este mes.
-                            </td>
-                          </tr>
-                        ) : (
-                          monthlyExpensePayments.map((item) => (
-                            <tr key={item.id} className="align-top">
-                              <td className="px-4 py-4 text-[#d8dde3]">{formatDate(item.date)}</td>
-                              <td className="px-4 py-4 text-[#d8dde3]">{item.paymentMethod}</td>
-                              <td
-                                className={[
-                                  "px-4 py-4 text-right font-semibold",
-                                  isDonationPayment(item.paymentMethod) ? "text-[#70d6ff]" : "text-[#ff8aa1]",
-                                ].join(" ")}
-                              >
-                                {money.format(item.amount)}
-                              </td>
-                              <td className="px-4 py-4 text-[#aeb5bf]">
-                                {item.notes ||
-                                  (isDonationPayment(item.paymentMethod)
-                                    ? "Donacion aplicada a deuda mas antigua"
-                                    : "Aplicado a deuda mas antigua")}
-                              </td>
-                              <td className="px-4 py-4 text-right">
-                                <button
-                                  onClick={() => deleteExpensePayment(item.id)}
-                                  disabled={deletingExpensePaymentId === item.id}
-                                  className="rounded-md border border-[#454b55] px-3 py-1.5 text-xs font-semibold text-[#d8dde3] transition hover:border-[#ff5f7e] hover:text-[#ff8aa1] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {deletingExpensePaymentId === item.id ? "Eliminando..." : "Eliminar"}
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PrettyExpensePaymentsTable
+                    payments={monthlyExpensePayments}
+                    deletingId={deletingExpensePaymentId}
+                    onDelete={deleteExpensePayment}
+                  />
                 </div>
               </div>
 
@@ -1385,36 +1107,7 @@ export default function PrettyEscritorioPage() {
                 title="Historial financiero"
                 description="Clientes generados a partir de los ingresos registrados."
               />
-              <div className="mt-5 overflow-x-auto rounded-lg border border-[#30333a]">
-                <table className="min-w-[720px] w-full text-left text-sm">
-                  <thead className="bg-[#111316] text-[#aeb5bf]">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Cliente</th>
-                      <th className="px-4 py-3 text-right font-medium">Visitas</th>
-                      <th className="px-4 py-3 text-right font-medium">Pagado</th>
-                      <th className="px-4 py-3 text-right font-medium">Pendiente</th>
-                      <th className="px-4 py-3 text-right font-medium">Ultima visita</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#30333a]">
-                    {clientRows.map((client) => (
-                      <tr key={client.name}>
-                        <td className="px-4 py-4 font-medium text-[#f7f9fb]">{client.name}</td>
-                        <td className="px-4 py-4 text-right text-[#d8dde3]">{client.visits}</td>
-                        <td className="px-4 py-4 text-right text-[#71f2d8]">
-                          {money.format(client.paid)}
-                        </td>
-                        <td className="px-4 py-4 text-right text-[#ffe06b]">
-                          {money.format(client.pending)}
-                        </td>
-                        <td className="px-4 py-4 text-right text-[#d8dde3]">
-                          {formatDate(client.lastDate)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <PrettyClientsTable clients={clientRows} />
             </section>
           ) : null}
 

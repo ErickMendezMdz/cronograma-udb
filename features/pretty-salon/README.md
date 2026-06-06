@@ -2,7 +2,7 @@
 
 This folder prepares the gradual modularization of `/pretty-escritorio`.
 
-Current phase: shared domain pieces, Supabase access, the main stateful orchestration, and small presentational dashboard/report components are extracted. The page still owns larger visual sections while deeper component splits are pending.
+Current phase: shared domain pieces, Supabase access, the main stateful orchestration, and presentational dashboard/report/list components are extracted. The page still owns forms, modals, and larger visual sections while deeper component splits are pending.
 
 ## Proposed structure
 
@@ -12,12 +12,12 @@ Current phase: shared domain pieces, Supabase access, the main stateful orchestr
 - `services/prettySalonService.ts`: Supabase access layer for transactions, cash transfers, expense payments, and loan movements.
 - `hooks/usePrettySalon.ts`: main stateful orchestration for auth session, data loading, legacy migration, forms, CRUD handlers, navigation state, and derived reports.
 - `components/dashboard/`: small presentational dashboard pieces such as metric cards, balance cards, section tabs, quick actions, and the dashboard header.
-- `components/transactions/`: income/expense forms, transaction tables, collection flows.
-- `components/expenses/`: expense payment dialog, pending expense allocation, settlement views.
-- `components/loans/`: loan movement form, loan balances, borrower views.
+- `components/transactions/`: presentational transaction lists/items, plus future income/expense forms and collection flows.
+- `components/expenses/`: presentational expense payment tables, plus future expense payment dialogs and settlement views.
+- `components/loans/`: presentational loan movement lists, plus future loan forms and borrower views.
 - `components/reports/`: presentational daily trend, category breakdowns, payment method breakdowns, monthly report tables, and report summaries.
 - `components/team/`: future team/member access UI if needed.
-- `components/shared/`: local shared cards, section titles, breakdown lists, dialogs, and table primitives specific to Pretty Salon.
+- `components/shared/`: local shared empty states, read-only tables, cards, section titles, dialogs, and table primitives specific to Pretty Salon.
 
 ## Future extraction order
 
