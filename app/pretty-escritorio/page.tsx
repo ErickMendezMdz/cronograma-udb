@@ -1,6 +1,5 @@
 "use client";
 
-import { type FormEvent } from "react";
 import Link from "next/link";
 import {
   collectionPaymentMethods,
@@ -17,6 +16,8 @@ import { PrettyDashboardHeader } from "@/features/pretty-salon/components/dashbo
 import { PrettyMetricCard } from "@/features/pretty-salon/components/dashboard/PrettyMetricCard";
 import { PrettyQuickActions } from "@/features/pretty-salon/components/dashboard/PrettyQuickActions";
 import { PrettySectionTabs } from "@/features/pretty-salon/components/dashboard/PrettySectionTabs";
+import { PrettyCollectIncomeDialog } from "@/features/pretty-salon/components/dialogs/PrettyCollectIncomeDialog";
+import { PrettyExpensePaymentDialog } from "@/features/pretty-salon/components/dialogs/PrettyExpensePaymentDialog";
 import { PrettyCategoryBreakdown } from "@/features/pretty-salon/components/reports/PrettyCategoryBreakdown";
 import { PrettyDailyTrend } from "@/features/pretty-salon/components/reports/PrettyDailyTrend";
 import { PrettyPaymentMethodBreakdown } from "@/features/pretty-salon/components/reports/PrettyPaymentMethodBreakdown";
@@ -31,7 +32,6 @@ import { PrettyCashTransfersTable } from "@/features/pretty-salon/components/sha
 import { PrettyClientsTable } from "@/features/pretty-salon/components/shared/PrettyClientsTable";
 import { PrettyTransactionsList } from "@/features/pretty-salon/components/transactions/PrettyTransactionsList";
 import { usePrettySalon } from "@/features/pretty-salon/hooks/usePrettySalon";
-import type { ExpensePaymentFormState } from "@/features/pretty-salon/types";
 import { formatMonth, money } from "@/features/pretty-salon/utils";
 
 function SectionTitle({
@@ -48,112 +48,6 @@ function SectionTitle({
       <p className="text-sm font-semibold text-[#00c2a8]">{label}</p>
       <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aeb5bf]">{description}</p>
-    </div>
-  );
-}
-
-function ExpensePaymentDialog({
-  form,
-  pendingTotal,
-  submitting,
-  onChange,
-  onSubmit,
-  onClose,
-}: {
-  form: ExpensePaymentFormState;
-  pendingTotal: number;
-  submitting?: boolean;
-  onChange: <K extends keyof ExpensePaymentFormState>(
-    field: K,
-    value: ExpensePaymentFormState[K]
-  ) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-md rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-2xl shadow-black/40"
-      >
-        <p className="text-sm font-semibold text-[#00c2a8]">Deuda de tarjeta</p>
-        <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">Registrar abono</h2>
-        <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
-          Pendiente actual:{" "}
-          <span className="font-semibold text-[#ffe06b]">{money.format(pendingTotal)}</span>.
-          El abono se aplica primero a la compra mas antigua. Si usas Donacion, baja la deuda sin afectar caja ni gastos pagados.
-        </p>
-
-        <div className="mt-5 grid gap-4">
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Monto a abonar</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={form.amount}
-              onChange={(event) => onChange("amount", event.target.value)}
-              placeholder="0.00"
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Fecha</span>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(event) => onChange("date", event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Metodo</span>
-            <select
-              value={form.paymentMethod}
-              onChange={(event) => onChange("paymentMethod", event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            >
-              {expenseSettlementMethods.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-[#c7ced6]">Notas</span>
-            <textarea
-              value={form.notes}
-              onChange={(event) => onChange("notes", event.target.value)}
-              rows={3}
-              placeholder="Ej. Abono mensual a tarjeta de credito o donacion de material"
-              className="mt-2 w-full resize-none rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-            />
-          </label>
-        </div>
-
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? "Guardando..." : "Confirmar abono"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded-lg border border-[#454b55] px-4 py-3 text-sm font-semibold text-[#d8dde3] transition hover:border-[#70d6ff] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancelar
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
@@ -738,66 +632,26 @@ export default function PrettyEscritorioPage() {
         </main>
       </div>
 
-      {collectionTarget ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-4 sm:items-center sm:justify-center">
-          <div className="w-full max-w-md rounded-lg border border-[#30333a] bg-[#181a1e] p-4 shadow-2xl shadow-black/40">
-            <p className="text-sm font-semibold text-[#00c2a8]">Cobro de credito</p>
-            <h2 className="mt-1 text-2xl font-semibold text-[#f7f9fb]">Marcar como cobrado</h2>
-            <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
-              {collectionTarget.contact || "Cliente"} cancelo{" "}
-              <span className="font-semibold text-[#f7f9fb]">
-                {money.format(collectionTarget.amount)}
-              </span>{" "}
-              por {collectionTarget.concept}.
-            </p>
+      <PrettyCollectIncomeDialog
+        target={collectionTarget}
+        methods={collectionPaymentMethods}
+        selectedMethod={collectionMethod}
+        collectingId={collectingId}
+        onMethodChange={setCollectionMethod}
+        onSubmit={collectPendingIncome}
+        onClose={() => setCollectionTarget(null)}
+      />
 
-            <label className="mt-5 block">
-              <span className="text-sm text-[#c7ced6]">Metodo recibido</span>
-              <select
-                value={collectionMethod}
-                onChange={(event) => setCollectionMethod(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-[#3a3f48] bg-[#101113] px-3 py-3 text-base text-[#f7f9fb] outline-none transition focus:border-[#00c2a8] sm:py-2 sm:text-sm"
-              >
-                {collectionPaymentMethods.map((method) => (
-                  <option key={method} value={method}>
-                    {method}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={collectPendingIncome}
-                disabled={collectingId === collectionTarget.id}
-                className="rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {collectingId === collectionTarget.id ? "Cobrando..." : "Confirmar cobro"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCollectionTarget(null)}
-                disabled={collectingId === collectionTarget.id}
-                className="rounded-lg border border-[#454b55] px-4 py-3 text-sm font-semibold text-[#d8dde3] transition hover:border-[#70d6ff] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {expensePaymentDialogOpen ? (
-        <ExpensePaymentDialog
-          form={expensePaymentForm}
-          pendingTotal={totalPendingExpenses}
-          submitting={savingExpensePayment}
-          onChange={updateExpensePaymentForm}
-          onSubmit={addExpensePayment}
-          onClose={() => setExpensePaymentDialogOpen(false)}
-        />
-      ) : null}
+      <PrettyExpensePaymentDialog
+        open={expensePaymentDialogOpen}
+        form={expensePaymentForm}
+        pendingTotal={totalPendingExpenses}
+        methods={expenseSettlementMethods}
+        submitting={savingExpensePayment}
+        onChange={updateExpensePaymentForm}
+        onSubmit={addExpensePayment}
+        onClose={() => setExpensePaymentDialogOpen(false)}
+      />
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#30333a] bg-[#15171a]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
