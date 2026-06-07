@@ -19,8 +19,12 @@ export const loanTabs: Array<{ id: LoanTab; label: string }> = [
   { id: "history", label: "Historial" },
 ];
 
-export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+export function getTodayDateInputValue() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function createEmptyLoanForm(): LoanFormState {
@@ -28,7 +32,7 @@ export function createEmptyLoanForm(): LoanFormState {
     itemName: "",
     borrowerName: "",
     category: "No lo sé",
-    loanDate: todayISO(),
+    loanDate: getTodayDateInputValue(),
     notes: "",
   };
 }

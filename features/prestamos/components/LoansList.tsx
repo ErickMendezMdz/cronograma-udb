@@ -1,4 +1,4 @@
-import type { PersonalLoan } from "@/features/prestamos/types";
+import type { LoanCategory, PersonalLoan } from "@/features/prestamos/types";
 import { LoanCard } from "@/features/prestamos/components/LoanCard";
 
 type LoansListProps = {
@@ -7,6 +7,7 @@ type LoansListProps = {
   workingId: string | null;
   onEdit: (loan: PersonalLoan) => void;
   onReturned: (id: string) => void;
+  onCategoryChange: (loan: PersonalLoan, category: LoanCategory) => void;
   onDelete: (id: string) => void;
 };
 
@@ -16,6 +17,7 @@ export function LoansList({
   workingId,
   onEdit,
   onReturned,
+  onCategoryChange,
   onDelete,
 }: LoansListProps) {
   if (loans.length === 0) {
@@ -35,6 +37,7 @@ export function LoansList({
           working={workingId === loan.id}
           onEdit={onEdit}
           onReturned={onReturned}
+          onCategoryChange={onCategoryChange}
           onDelete={onDelete}
         />
       ))}

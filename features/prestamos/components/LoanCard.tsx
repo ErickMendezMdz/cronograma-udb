@@ -1,4 +1,5 @@
-import type { PersonalLoan } from "@/features/prestamos/types";
+import { loanCategories } from "@/features/prestamos/constants";
+import type { LoanCategory, PersonalLoan } from "@/features/prestamos/types";
 
 type LoanCardProps = {
   loan: PersonalLoan;
@@ -6,6 +7,7 @@ type LoanCardProps = {
   onEdit?: (loan: PersonalLoan) => void;
   onReturned?: (id: string) => void;
   onRestore?: (id: string) => void;
+  onCategoryChange?: (loan: PersonalLoan, category: LoanCategory) => void;
   onDelete: (id: string) => void;
 };
 
@@ -32,9 +34,11 @@ export function LoanCard({
   onEdit,
   onReturned,
   onRestore,
+  onCategoryChange,
   onDelete,
 }: LoanCardProps) {
   const isReturned = loan.status === "returned";
+  const canQuickCategorize = !isReturned && loan.category === "No lo sé" && onCategoryChange;
 
   return (
     <article className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
@@ -73,6 +77,24 @@ export function LoanCard({
         <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-400">
           {loan.notes}
         </p>
+      ) : null}
+
+      {canQuickCategorize ? (
+        <label className="mt-4 block">
+          <span className="text-xs font-semibold text-amber-200">Mover a categoría</span>
+          <select
+            value={loan.category}
+            onChange={(event) => onCategoryChange(loan, event.target.value as LoanCategory)}
+            disabled={working}
+            className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loanCategories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">

@@ -57,17 +57,10 @@ export function LoansDashboard() {
           <h1 className="mt-1 text-3xl font-semibold text-slate-100">
             Qué presté y quién lo tiene
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Registra cosas prestadas en segundos y márcalas como devueltas cuando regresen.
-          </p>
         </div>
         <Button onClick={loans.openCreateForm} className="shrink-0">
           + Registrar préstamo
         </Button>
-      </div>
-
-      <div className="mt-6">
-        <LoanSummary counts={loans.summaryCounts} />
       </div>
 
       {loans.formOpen ? (
@@ -82,6 +75,10 @@ export function LoansDashboard() {
           />
         </div>
       ) : null}
+
+      <div className="mt-6">
+        <LoanSummary counts={loans.summaryCounts} />
+      </div>
 
       <div className="mt-6">
         <LoanFilters
@@ -124,6 +121,7 @@ export function LoansDashboard() {
             workingId={loans.workingId}
             onEdit={loans.editLoan}
             onReturned={loans.markReturned}
+            onCategoryChange={loans.changeLoanCategory}
             onDelete={loans.deleteLoan}
           />
         )}

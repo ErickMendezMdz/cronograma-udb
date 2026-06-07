@@ -274,6 +274,32 @@ export function useLoans() {
     [loadLoans, supabase, userId]
   );
 
+  const changeLoanCategory = useCallback(
+    async (loan: PersonalLoan, category: LoanCategory) => {
+      if (!supabase || !userId) return;
+
+      setWorkingId(loan.id);
+
+      const { error: updateError } = await updateLoanRecord(supabase, loan.id, userId, {
+        itemName: loan.itemName,
+        borrowerName: loan.borrowerName,
+        category,
+        loanDate: loan.loanDate,
+        notes: loan.notes,
+      });
+
+      setWorkingId(null);
+
+      if (updateError) {
+        alert(updateError.message);
+        return;
+      }
+
+      await loadLoans(userId);
+    },
+    [loadLoans, supabase, userId]
+  );
+
   const handleLogout = useCallback(async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -313,6 +339,7 @@ export function useLoans() {
     markReturned,
     restoreLoan,
     deleteLoan,
+    changeLoanCategory,
     handleLogout,
   };
 }
