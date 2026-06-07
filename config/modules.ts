@@ -1,5 +1,10 @@
 export type AppModule = {
-  id: "cronograma" | "dinero-tanque" | "spotify-familiar" | "pretty-escritorio";
+  id:
+    | "cronograma"
+    | "dinero-tanque"
+    | "spotify-familiar"
+    | "pretty-escritorio"
+    | "prestamos";
   name: string;
   description: string;
   href: string;
@@ -34,6 +39,14 @@ export const appModules: AppModule[] = [
       "Controla pagos mensuales, abonos rapidos y deudas acumuladas por miembro.",
     href: "/spotify-familiar",
     accent: "green",
+    status: "Nuevo",
+  },
+  {
+    id: "prestamos",
+    name: "Cosas Prestadas",
+    description: "Control rápido de cosas que has prestado",
+    href: "/prestamos",
+    accent: "blue",
     status: "Nuevo",
   },
   {
