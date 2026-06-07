@@ -9,6 +9,7 @@ type ModuleShellProps = {
   actions?: ReactNode;
   className?: string;
   contentClassName?: string;
+  chrome?: boolean;
 };
 
 export function ModuleShell({
@@ -17,7 +18,16 @@ export function ModuleShell({
   actions,
   className = "",
   contentClassName = "",
+  chrome = true,
 }: ModuleShellProps) {
+  if (!chrome) {
+    return (
+      <main className={["min-h-screen bg-transparent text-slate-100", className].join(" ")}>
+        <div className={contentClassName}>{children}</div>
+      </main>
+    );
+  }
+
   return (
     <main className={["min-h-screen bg-transparent p-4 text-slate-100", className].join(" ")}>
       <div className="mx-auto max-w-7xl">
