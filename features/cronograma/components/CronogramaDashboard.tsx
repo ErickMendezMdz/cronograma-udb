@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/Button";
 import { EventModal } from "@/features/cronograma/components/EventModal";
+import { SubjectsManager } from "@/features/cronograma/components/SubjectsManager";
 import { WeekNavigator } from "@/features/cronograma/components/WeekNavigator";
 import { WeeklyCalendarGrid } from "@/features/cronograma/components/WeeklyCalendarGrid";
 import { useCronograma } from "@/features/cronograma/hooks/useCronograma";
@@ -22,6 +23,9 @@ export function CronogramaDashboard() {
     setModalOpen,
     editOpen,
     setEditOpen,
+    subjectsOpen,
+    setSubjectsOpen,
+    subjectWorkingId,
     editing,
     setEditing,
     draft,
@@ -33,7 +37,10 @@ export function CronogramaDashboard() {
     saveEvent,
     updateEvent,
     deleteEvent,
-    seedSubjects,
+    createSubject,
+    updateSubject,
+    deleteSubject,
+    resetCronograma,
     handleLogout,
   } = useCronograma();
 
@@ -75,7 +82,7 @@ export function CronogramaDashboard() {
           <WeekNavigator
             weekAnchor={weekAnchor}
             setWeekAnchor={setWeekAnchor}
-            seedSubjects={seedSubjects}
+            openSubjectsManager={() => setSubjectsOpen(true)}
           />
 
           <Button
@@ -125,6 +132,18 @@ export function CronogramaDashboard() {
             label: "Eliminar",
             onClick: deleteEvent,
           }}
+        />
+      )}
+
+      {subjectsOpen && (
+        <SubjectsManager
+          subjects={subjects}
+          workingId={subjectWorkingId}
+          onClose={() => setSubjectsOpen(false)}
+          onCreate={createSubject}
+          onUpdate={updateSubject}
+          onDelete={deleteSubject}
+          onClear={resetCronograma}
         />
       )}
     </div>

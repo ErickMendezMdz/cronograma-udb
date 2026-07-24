@@ -35,7 +35,8 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - Ruta y registro: `Cronograma`, `/cronograma`; dominio `features/cronograma/`.
 - Ensamblador, hook y service: `CronogramaDashboard`, `useCronograma`, `cronogramaService.ts`.
 - Tablas: `uni_subjects` y `uni_events`. No hay un archivo SQL para ellas en `supabase/`.
-- Función: calendario académico semanal por materias, con actividades de uno o varios días; permite crear, editar y eliminar eventos, navegar semanas y sembrar materias iniciales si no existen.
+- Función: calendario académico semanal por materias, con actividades de uno o varios días; permite crear, editar y eliminar eventos y navegar semanas.
+- La opción `Gestionar materias` permite crear, editar y ordenar materias. Eliminar una materia borra también sus actividades, y `Limpiar todo el cronograma` elimina todas las materias y actividades del usuario tras confirmación. No conserva ciclos ni historial y ya no existe una lista fija de materias iniciales.
 
 ### Dinero Tanque
 
@@ -102,6 +103,7 @@ Los cuatro archivos habilitan RLS y definen políticas para usuarios autenticado
 - Páginas de módulo delgadas; hooks para orquestación; services para consultas de tablas; UI separada del acceso a datos.
 - Registro de módulos centralizado en `config/modules.ts` y dependencias cruzadas mínimas.
 - Compatibilidad prioritaria con Supabase Free y Vercel Hobby/Free.
+- Cronograma administra una única lista vigente de materias: no conserva ciclos; sus eliminaciones y limpieza también descartan las actividades relacionadas.
 - Pretty Salon conserva una identidad visual y navegación interna propias.
 - Cosas Prestadas mantiene el historial de devueltos separado y permite reclasificar `No lo sé`.
 

@@ -84,7 +84,8 @@ export function WeeklyCalendarGrid({
             <div className="p-6 text-center text-slate-400">Cargando...</div>
           ) : subjects.length === 0 ? (
             <div className="p-6 text-center text-slate-400">
-              No hay materias. Dale a <b>“Cargar materias”</b>.
+              No hay materias. Abre <b>“Gestionar materias”</b> para agregar la
+              primera.
             </div>
           ) : (
             subjects.map((subject) => {

@@ -3,19 +3,25 @@ import { addDays, formatISODate } from "@/lib/week";
 import type {
   EventDraft,
   Subject,
+  SubjectDraft,
   UniEvent,
   UniEventRow,
 } from "@/features/cronograma/types";
 
-export async function getSubjects(supabase: SupabaseClient) {
+export async function getSubjects(
+  supabase: SupabaseClient,
+  ownerId: string
+) {
   return supabase
     .from("uni_subjects")
     .select("id, code, name, order_index")
+    .eq("owner_id", ownerId)
     .order("order_index", { ascending: true });
 }
 
 export async function getWeekEvents(
   supabase: SupabaseClient,
+  ownerId: string,
   monday: Date
 ) {
   const start = formatISODate(monday);
@@ -24,15 +30,20 @@ export async function getWeekEvents(
   return supabase
     .from("uni_events")
     .select("id, subject_id, title, type, date, end_date, weight_percent")
+    .eq("owner_id", ownerId)
     .lt("date", endExclusive)
     .gte("end_date", start);
 }
 
 export async function loadCronogramaWeek(
   supabase: SupabaseClient,
+  ownerId: string,
   monday: Date
 ) {
-  const { data: subj, error: subjectsError } = await getSubjects(supabase);
+  const { data: subj, error: subjectsError } = await getSubjects(
+    supabase,
+    ownerId
+  );
 
   if (subjectsError) {
     return {
@@ -44,6 +55,7 @@ export async function loadCronogramaWeek(
 
   const { data: ev, error: eventsError } = await getWeekEvents(
     supabase,
+    ownerId,
     monday
   );
 
@@ -86,6 +98,7 @@ export async function createCronogramaEvent(
 
 export async function updateCronogramaEvent(
   supabase: SupabaseClient,
+  ownerId: string,
   eventId: string,
   draft: EventDraft,
   weightPercent: number | null
@@ -99,39 +112,85 @@ export async function updateCronogramaEvent(
       end_date: draft.endDate || draft.startDate,
       weight_percent: weightPercent,
     })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .eq("owner_id", ownerId);
 }
 
 export async function deleteCronogramaEvent(
   supabase: SupabaseClient,
+  ownerId: string,
   eventId: string
 ) {
-  return supabase.from("uni_events").delete().eq("id", eventId);
+  return supabase
+    .from("uni_events")
+    .delete()
+    .eq("id", eventId)
+    .eq("owner_id", ownerId);
 }
 
-export async function seedSubjectsIfEmpty(supabase: SupabaseClient) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const user = sessionData.session?.user;
-  if (!user) throw new Error("No hay sesión.");
+export async function createCronogramaSubject(
+  supabase: SupabaseClient,
+  ownerId: string,
+  draft: SubjectDraft
+) {
+  return supabase.from("uni_subjects").insert({
+    owner_id: ownerId,
+    code: draft.code.trim().toUpperCase(),
+    name: draft.name.trim() || null,
+    order_index: draft.orderIndex,
+  });
+}
 
-  const { data: existing, error: e1 } = await supabase
+export async function updateCronogramaSubject(
+  supabase: SupabaseClient,
+  ownerId: string,
+  subjectId: string,
+  draft: SubjectDraft
+) {
+  return supabase
     .from("uni_subjects")
-    .select("id")
-    .limit(1);
+    .update({
+      code: draft.code.trim().toUpperCase(),
+      name: draft.name.trim() || null,
+      order_index: draft.orderIndex,
+    })
+    .eq("id", subjectId)
+    .eq("owner_id", ownerId);
+}
 
-  if (e1) throw e1;
-  if (existing && existing.length > 0) return { seeded: false };
+export async function deleteCronogramaSubject(
+  supabase: SupabaseClient,
+  ownerId: string,
+  subjectId: string
+) {
+  const { error: eventsError } = await supabase
+    .from("uni_events")
+    .delete()
+    .eq("subject_id", subjectId)
+    .eq("owner_id", ownerId);
 
-  const subjects = [
-    { code: "ACE", name: null, order_index: 1 },
-    { code: "ACO", name: null, order_index: 2 },
-    { code: "DDP", name: null, order_index: 3 },
-    { code: "OFC", name: null, order_index: 4 },
-    { code: "PSC", name: null, order_index: 5 },
-  ].map((subject) => ({ ...subject, owner_id: user.id }));
+  if (eventsError) return { error: eventsError };
 
-  const { error: e2 } = await supabase.from("uni_subjects").insert(subjects);
-  if (e2) throw e2;
+  return supabase
+    .from("uni_subjects")
+    .delete()
+    .eq("id", subjectId)
+    .eq("owner_id", ownerId);
+}
 
-  return { seeded: true };
+export async function clearCronograma(
+  supabase: SupabaseClient,
+  ownerId: string
+) {
+  const { error: eventsError } = await supabase
+    .from("uni_events")
+    .delete()
+    .eq("owner_id", ownerId);
+
+  if (eventsError) return { error: eventsError };
+
+  return supabase
+    .from("uni_subjects")
+    .delete()
+    .eq("owner_id", ownerId);
 }

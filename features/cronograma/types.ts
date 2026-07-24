@@ -5,6 +5,12 @@ export type Subject = {
   order_index: number;
 };
 
+export type SubjectDraft = {
+  code: string;
+  name: string;
+  orderIndex: number;
+};
+
 export type UniEventType = "evaluado_entrega" | "reunion" | "teorica";
 
 export type UniEvent = {

@@ -14,16 +14,20 @@ import {
   startOfWeekMonday,
 } from "@/lib/week";
 import {
+  clearCronograma,
+  createCronogramaSubject,
   createCronogramaEvent,
+  deleteCronogramaSubject,
   deleteCronogramaEvent,
   loadCronogramaWeek,
-  seedSubjectsIfEmpty,
+  updateCronogramaSubject,
   updateCronogramaEvent,
 } from "@/features/cronograma/services/cronogramaService";
 import type {
   CalendarBar,
   EventDraft,
   Subject,
+  SubjectDraft,
   UniEvent,
   UniEventType,
 } from "@/features/cronograma/types";
@@ -109,6 +113,7 @@ export function useCronograma() {
 
   const [gridHeight, setGridHeight] = useState<number>(520);
   const [checking, setChecking] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
   const monday = useMemo(() => startOfWeekMonday(weekAnchor), [weekAnchor]);
   const todayISO = useMemo(() => formatISODate(new Date()), []);
@@ -117,6 +122,8 @@ export function useCronograma() {
   const [loadingData, setLoadingData] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [subjectsOpen, setSubjectsOpen] = useState(false);
+  const [subjectWorkingId, setSubjectWorkingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<UniEvent | null>(null);
   const [draft, setDraft] = useState<EventDraft>(emptyDraft);
 
@@ -133,21 +140,25 @@ export function useCronograma() {
   }, []);
 
   useEffect(() => {
-    if (modalOpen || editOpen) {
+    if (modalOpen || editOpen || subjectsOpen) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = prev;
       };
     }
-  }, [modalOpen, editOpen]);
+  }, [editOpen, modalOpen, subjectsOpen]);
 
   const loadWeekData = useCallback(
-    async (weekStart = monday) => {
-      if (!supabase) return;
+    async (weekStart = monday, currentUserId = userId) => {
+      if (!supabase || !currentUserId) return;
 
       setLoadingData(true);
-      const result = await loadCronogramaWeek(supabase, weekStart);
+      const result = await loadCronogramaWeek(
+        supabase,
+        currentUserId,
+        weekStart
+      );
 
       if (result.error || !result.subjects || !result.events) {
         alert(result.error ?? "No se pudieron cargar los datos.");
@@ -159,7 +170,7 @@ export function useCronograma() {
       setEvents(result.events);
       setLoadingData(false);
     },
-    [monday, supabase]
+    [monday, supabase, userId]
   );
 
   useEffect(() => {
@@ -182,6 +193,7 @@ export function useCronograma() {
         return;
       }
 
+      setUserId(session.user.id);
       setChecking(false);
     }
     loadSession();
@@ -279,7 +291,9 @@ export function useCronograma() {
   }, [configError, draft, loadWeekData, monday, supabase]);
 
   const updateEvent = useCallback(async () => {
-    if (!supabase) return alert(configError ?? "Falta configurar Supabase.");
+    if (!supabase || !userId) {
+      return alert(configError ?? "Falta configurar Supabase.");
+    }
     if (!editing) return;
     if (!draft.title.trim()) return alert("Poné un título.");
 
@@ -293,6 +307,7 @@ export function useCronograma() {
 
     const { error: updateError } = await updateCronogramaEvent(
       supabase,
+      userId,
       editing.id,
       { ...draft, endDate: end },
       weight
@@ -303,33 +318,116 @@ export function useCronograma() {
     setEditOpen(false);
     setEditing(null);
     await loadWeekData(monday);
-  }, [configError, draft, editing, loadWeekData, monday, supabase]);
+  }, [configError, draft, editing, loadWeekData, monday, supabase, userId]);
 
   const deleteEvent = useCallback(async () => {
-    if (!supabase) return alert(configError ?? "Falta configurar Supabase.");
+    if (!supabase || !userId) {
+      return alert(configError ?? "Falta configurar Supabase.");
+    }
     if (!editing) return;
     const ok = confirm(`¿Eliminar "${editing.title}"?`);
     if (!ok) return;
 
-    const { error } = await deleteCronogramaEvent(supabase, editing.id);
+    const { error } = await deleteCronogramaEvent(
+      supabase,
+      userId,
+      editing.id
+    );
     if (error) return alert(error.message);
 
     setEditOpen(false);
     setEditing(null);
     await loadWeekData(monday);
-  }, [configError, editing, loadWeekData, monday, supabase]);
+  }, [configError, editing, loadWeekData, monday, supabase, userId]);
 
-  const seedSubjects = useCallback(async () => {
-    if (!supabase) return alert(configError ?? "Falta configurar Supabase.");
+  const createSubject = useCallback(
+    async (subjectDraft: SubjectDraft) => {
+      if (!supabase || !userId) {
+        alert(configError ?? "Falta configurar Supabase.");
+        return false;
+      }
 
-    try {
-      const res = await seedSubjectsIfEmpty(supabase);
-      if (res.seeded) alert("Materias cargadas ✅");
+      setSubjectWorkingId("new");
+      const { error } = await createCronogramaSubject(
+        supabase,
+        userId,
+        subjectDraft
+      );
+      setSubjectWorkingId(null);
+
+      if (error) {
+        alert(error.message);
+        return false;
+      }
       await loadWeekData(monday);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Error sembrando materias");
+      return true;
+    },
+    [configError, loadWeekData, monday, supabase, userId]
+  );
+
+  const updateSubject = useCallback(
+    async (subjectId: string, subjectDraft: SubjectDraft) => {
+      if (!supabase || !userId) {
+        return alert(configError ?? "Falta configurar Supabase.");
+      }
+
+      setSubjectWorkingId(subjectId);
+      const { error } = await updateCronogramaSubject(
+        supabase,
+        userId,
+        subjectId,
+        subjectDraft
+      );
+      setSubjectWorkingId(null);
+
+      if (error) return alert(error.message);
+      await loadWeekData(monday);
+    },
+    [configError, loadWeekData, monday, supabase, userId]
+  );
+
+  const deleteSubject = useCallback(
+    async (subject: Subject) => {
+      if (!supabase || !userId) {
+        return alert(configError ?? "Falta configurar Supabase.");
+      }
+
+      const ok = confirm(
+        `¿Eliminar la materia "${subject.code}" y todas sus actividades?`
+      );
+      if (!ok) return;
+
+      setSubjectWorkingId(subject.id);
+      const { error } = await deleteCronogramaSubject(
+        supabase,
+        userId,
+        subject.id
+      );
+      setSubjectWorkingId(null);
+
+      if (error) return alert(error.message);
+      await loadWeekData(monday);
+    },
+    [configError, loadWeekData, monday, supabase, userId]
+  );
+
+  const resetCronograma = useCallback(async () => {
+    if (!supabase || !userId) {
+      return alert(configError ?? "Falta configurar Supabase.");
     }
-  }, [configError, loadWeekData, monday, supabase]);
+
+    const ok = confirm(
+      "¿Eliminar todas las materias y actividades del cronograma? Esta acción no se puede deshacer."
+    );
+    if (!ok) return;
+
+    setSubjectWorkingId("clear");
+    const { error } = await clearCronograma(supabase, userId);
+    setSubjectWorkingId(null);
+
+    if (error) return alert(error.message);
+    await loadWeekData(monday);
+  }, [configError, loadWeekData, monday, supabase, userId]);
 
   const handleLogout = useCallback(async () => {
     if (!supabase) return;
@@ -353,6 +451,9 @@ export function useCronograma() {
     setModalOpen,
     editOpen,
     setEditOpen,
+    subjectsOpen,
+    setSubjectsOpen,
+    subjectWorkingId,
     editing,
     setEditing,
     draft,
@@ -364,7 +465,10 @@ export function useCronograma() {
     saveEvent,
     updateEvent,
     deleteEvent,
-    seedSubjects,
+    createSubject,
+    updateSubject,
+    deleteSubject,
+    resetCronograma,
     handleLogout,
   };
 }

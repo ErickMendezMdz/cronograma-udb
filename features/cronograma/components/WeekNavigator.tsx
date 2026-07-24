@@ -3,13 +3,13 @@ import { addDays } from "@/lib/week";
 type WeekNavigatorProps = {
   weekAnchor: Date;
   setWeekAnchor: (date: Date) => void;
-  seedSubjects: () => Promise<void>;
+  openSubjectsManager: () => void;
 };
 
 export function WeekNavigator({
   weekAnchor,
   setWeekAnchor,
-  seedSubjects,
+  openSubjectsManager,
 }: WeekNavigatorProps) {
   return (
     <div className="mt flex gap-2 overflow-x-auto pb-1">
@@ -32,10 +32,10 @@ export function WeekNavigator({
         Semana →
       </button>
       <button
-        onClick={seedSubjects}
+        onClick={openSubjectsManager}
         className="shrink-0 rounded-xl bg-blue-500 px-3 py-2 text-xs font-semibold text-slate-950"
       >
-        Cargar materias
+        Gestionar materias
       </button>
     </div>
   );
