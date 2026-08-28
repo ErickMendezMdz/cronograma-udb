@@ -19,7 +19,7 @@ export function SharedCaseForm({ cards, saving, onSave, onCancel }: Props) {
   const initialDates = nextPayOpportunities(today);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [names, setNames] = useState("Yo\nHermano 1\nHermano 2\nHermano 3\nHermano 4\nHermano 5\nHermano 6");
+  const [names, setNames] = useState("Hermano 1\nHermano 2\nHermano 3\nHermano 4\nHermano 5\nHermano 6\nYo");
   const [purchase, setPurchase] = useState({
     description: "", purchaseDate: today, amount: "", cardId: "",
     firstOpportunity: initialDates[0], secondOpportunity: initialDates[1],
@@ -36,6 +36,10 @@ export function SharedCaseForm({ cards, saving, onSave, onCancel }: Props) {
     if (participantNames.length < 2) return;
     if (new Set(participantNames.map((name) => name.toLowerCase())).size !== participantNames.length) {
       alert("Los participantes deben tener nombres distintos.");
+      return;
+    }
+    if (!participantNames.some((name) => name.toLocaleLowerCase("es") === "yo")) {
+      alert('Incluye un participante llamado "Yo" para identificar tu parte.');
       return;
     }
     const success = await onSave({
@@ -61,7 +65,7 @@ export function SharedCaseForm({ cards, saving, onSave, onCancel }: Props) {
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <label className="block"><span className="text-sm text-slate-400">Nombre de la causa</span><input className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Medicinas de mamá" required /></label>
-          <label className="block"><span className="text-sm text-slate-400">Participantes, uno por línea</span><textarea className={fieldClass} rows={8} value={names} onChange={(e) => setNames(e.target.value)} required /><span className="mt-2 block text-xs text-slate-500">La primera línea eres tú. Tu parte se calcula, pero no se cobra.</span></label>
+          <label className="block"><span className="text-sm text-slate-400">Participantes, uno por línea</span><textarea className={fieldClass} rows={8} value={names} onChange={(e) => setNames(e.target.value)} required /><span className="mt-2 block text-xs text-slate-500">Escribe “Yo” en cualquier línea; el sistema te mostrará al final y no cobrará tu parte.</span></label>
           <label className="block"><span className="text-sm text-slate-400">Notas privadas del caso</span><textarea className={fieldClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
         <div className="space-y-4 rounded-2xl bg-slate-950/50 p-4">

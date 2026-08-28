@@ -95,34 +95,36 @@ export function SharedCaseDetail(props: Props) {
 
   if (shareMode) {
     return (
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
+      <div className="mx-auto max-w-xl">
+        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
           <Button variant="secondary" onClick={() => setShareMode(false)}>Volver al caso</Button>
           <label className="flex-1 text-sm text-slate-400">Destacar a alguien<select className={inputClass} value={highlighted} onChange={(e) => setHighlighted(e.target.value)}><option value="">Todos por igual</option>{balances.filter((item) => !item.isOwner).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         </div>
-        <section className="overflow-hidden rounded-3xl border border-emerald-300/40 bg-[#08131f] shadow-2xl shadow-black/40">
-          <div className="bg-gradient-to-r from-emerald-500/25 to-blue-500/20 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Resumen compartido</p>
-            <h1 className="mt-2 text-2xl font-semibold text-white">{sharedCase.title}</h1>
-            <p className="mt-2 text-sm text-slate-300">Actualizado: {formatDate(today)} · {sharedCase.purchases.length} {sharedCase.purchases.length === 1 ? "compra" : "compras"}</p>
+        <section className="overflow-hidden rounded-2xl border border-emerald-300/40 bg-[#08131f] shadow-xl shadow-black/40">
+          <div className="bg-gradient-to-r from-emerald-500/25 to-blue-500/20 px-4 py-3">
+            <div className="flex items-end justify-between gap-3">
+              <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Resumen compartido</p><h1 className="mt-1 text-xl font-semibold text-white">{sharedCase.title}</h1></div>
+              <p className="shrink-0 text-[10px] text-slate-300">{formatDate(today)} · {sharedCase.purchases.length} {sharedCase.purchases.length === 1 ? "compra" : "compras"}</p>
+            </div>
           </div>
           <div className="grid grid-cols-3 border-y border-slate-700 bg-slate-950/60 text-center">
-            <div className="p-3"><p className="text-xs text-slate-400">Acumulado</p><p className="mt-1 font-semibold text-white">{formatMoney(totals.purchaseTotal)}</p></div>
-            <div className="border-x border-slate-700 p-3"><p className="text-xs text-slate-400">Recibido</p><p className="mt-1 font-semibold text-emerald-300">{formatMoney(totals.received)}</p></div>
-            <div className="p-3"><p className="text-xs text-slate-400">Pendiente</p><p className="mt-1 font-semibold text-amber-200">{formatMoney(totals.pending)}</p></div>
+            <div className="px-2 py-2"><p className="text-[10px] text-slate-400">Monto deuda</p><p className="text-sm font-semibold text-white">{formatMoney(totals.purchaseTotal)}</p></div>
+            <div className="border-x border-slate-700 px-2 py-2"><p className="text-[10px] text-slate-400">Recibido</p><p className="text-sm font-semibold text-emerald-300">{formatMoney(totals.received)}</p></div>
+            <div className="px-2 py-2"><p className="text-[10px] text-slate-400">Pendiente</p><p className="text-sm font-semibold text-amber-200">{formatMoney(totals.pending)}</p></div>
           </div>
-          <div className="space-y-2 p-4">
+          {totals.roundingAdjustment > 0.005 ? <p className="border-b border-slate-700 bg-slate-950/40 px-3 py-1 text-center text-[10px] text-slate-400">Ajuste para aportes iguales: +{formatMoney(totals.roundingAdjustment)}</p> : null}
+          <div className="divide-y divide-slate-700 px-3">
             {balances.map((balance) => (
-              <article key={balance.id} className={`rounded-2xl border p-3 transition ${highlighted === balance.id ? "border-amber-300 bg-amber-400/15 ring-2 ring-amber-300/30" : "border-slate-700 bg-slate-900/75"}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div><p className="font-semibold text-white">{balance.name}{highlighted === balance.id ? " · destacado" : ""}</p><p className="mt-1 text-xs text-slate-400">Asignado {formatMoney(balance.assigned)} · Pagado {formatMoney(balance.paid)}</p></div>
-                  <div className="text-right"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span><p className="mt-2 text-sm font-semibold text-white">Debe {formatMoney(balance.pending)}</p></div>
+              <article key={balance.id} className={`-mx-3 px-3 py-2 transition ${highlighted === balance.id ? "bg-amber-400/15 ring-1 ring-inset ring-amber-300/50" : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-white">{balance.name}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div><p className="mt-0.5 text-[10px] text-slate-400">Pagó {formatMoney(balance.paid)} · Debe {formatMoney(balance.pending)}</p></div>
+                  <p className="shrink-0 text-right text-xs font-semibold text-white">{formatMoney(balance.assigned)}</p>
                 </div>
-                {!balance.isOwner && balance.pending > 0 ? <p className="mt-2 text-xs text-slate-300">{balance.status === "overdue" ? `Saldo vencido desde ${formatDate(balance.firstOpportunity)}` : `Puede pagar: ${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p> : null}
+                {!balance.isOwner && balance.pending > 0 ? <p className="mt-0.5 text-[10px] text-slate-300">{balance.status === "overdue" ? `Vencido desde ${formatDate(balance.firstOpportunity)}` : `Puede pagar: ${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p> : null}
               </article>
             ))}
           </div>
-          <div className="border-t border-slate-700 p-4 text-xs text-slate-400">
+          <div className="border-t border-slate-700 px-3 py-2 text-[10px] leading-4 text-slate-400">
             {sharedCase.purchases.map((item) => <p key={item.id}>{formatDate(item.purchaseDate)} · {item.description}: {formatMoney(item.amount)}</p>)}
           </div>
         </section>

@@ -62,25 +62,27 @@ export function estimatedCardDates(purchaseDate: string, card?: CreditCard) {
 
 export function splitAmount(amount: number, participants: SharedParticipant[]) {
   const totalCents = Math.round(amount * 100);
-  const base = Math.floor(totalCents / participants.length);
-  let remainder = totalCents - base * participants.length;
+  const equalShareCents = Math.ceil(totalCents / participants.length);
 
-  return participants.map((participant) => {
-    const cents = base + (remainder > 0 ? 1 : 0);
-    remainder = Math.max(0, remainder - 1);
-    return { participantId: participant.id, amount: cents / 100 };
-  });
+  return participants.map((participant) => ({
+    participantId: participant.id,
+    amount: equalShareCents / 100,
+  }));
 }
 
 export function getParticipantBalances(sharedCase: SharedCase): ParticipantBalance[] {
   const today = localDateValue();
 
-  return sharedCase.participants.map((participant) => {
+  return [...sharedCase.participants]
+    .sort((a, b) => Number(a.isOwner) - Number(b.isOwner))
+    .map((participant) => {
     const assigned = sharedCase.purchases.reduce(
       (sum, purchase) =>
         sum +
-        (purchase.shares.find((share) => share.participantId === participant.id)
-          ?.amount ?? 0),
+        Math.ceil(
+          Math.round(purchase.amount * 100) / sharedCase.participants.length
+        ) /
+          100,
       0
     );
     const paid = sharedCase.payments
@@ -91,9 +93,10 @@ export function getParticipantBalances(sharedCase: SharedCase): ParticipantBalan
     const pendingPurchases = [...sharedCase.purchases]
       .sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate))
       .filter((purchase) => {
-        const share = purchase.shares.find(
-          (item) => item.participantId === participant.id
-        )?.amount ?? 0;
+        const share =
+          Math.ceil(
+            Math.round(purchase.amount * 100) / sharedCase.participants.length
+          ) / 100;
         const applied = Math.min(paymentRemaining, share);
         paymentRemaining -= applied;
         return share - applied > 0.005;
@@ -123,7 +126,7 @@ export function getParticipantBalances(sharedCase: SharedCase): ParticipantBalan
         futureOpportunities[0] ?? pendingPurchases[0]?.secondOpportunity ?? null,
       secondOpportunity: futureOpportunities[1] ?? null,
     };
-  });
+    });
 }
 
 export function caseTotals(sharedCase: SharedCase) {
@@ -138,11 +141,17 @@ export function caseTotals(sharedCase: SharedCase) {
     (sum, allocation) => sum + allocation.amount,
     0
   );
+  const assignedTotal = balances.reduce(
+    (sum, balance) => sum + balance.assigned,
+    0
+  );
+  const purchaseTotal = sharedCase.purchases.reduce(
+    (sum, purchase) => sum + purchase.amount,
+    0
+  );
   return {
-    purchaseTotal: sharedCase.purchases.reduce(
-      (sum, purchase) => sum + purchase.amount,
-      0
-    ),
+    purchaseTotal,
+    roundingAdjustment: Math.max(0, assignedTotal - purchaseTotal),
     collectable,
     received,
     pending: Math.max(0, collectable - received),

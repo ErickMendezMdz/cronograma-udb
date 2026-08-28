@@ -176,8 +176,9 @@ export async function createSharedCase(supabase: SupabaseClient, ownerId: string
         owner_id: ownerId,
         case_id: caseResult.data.id,
         name: name.trim(),
-        is_owner: index === 0,
-        display_order: index,
+        is_owner: name.trim().toLocaleLowerCase("es") === "yo",
+        display_order:
+          name.trim().toLocaleLowerCase("es") === "yo" ? 999 : index,
       }))
     )
     .select("id, name, is_owner");
