@@ -1,10 +1,10 @@
 import { ModuleShell } from "@/components/layout/ModuleShell";
-import { LoansDashboard } from "@/features/prestamos/components/LoansDashboard";
+import { RemindersDashboard } from "@/features/recordatorios/components/RemindersDashboard";
 
 export default function PrestamosPage() {
   return (
-    <ModuleShell title="Cosas Prestadas">
-      <LoansDashboard />
+    <ModuleShell title="Recordatorios">
+      <RemindersDashboard />
     </ModuleShell>
   );
 }

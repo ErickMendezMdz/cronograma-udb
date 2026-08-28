@@ -44,7 +44,7 @@ export function LoansDashboard() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
         <span>
-          {loans.email ? `Sesión: ${loans.email}` : "Cosas Prestadas"}
+          {loans.email ? `Sesión: ${loans.email}` : "Cosas prestadas"}
         </span>
         <Button onClick={loans.handleLogout} variant="secondary">
           Salir

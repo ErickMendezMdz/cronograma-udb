@@ -60,15 +60,18 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - Función: panel de ingresos, gastos, caja, transferencias, pagos de gastos, préstamos, clientes, catálogo base de servicios y reportes mensuales. Gestiona movimientos pagados o pendientes y conserva migración de datos heredados desde `localStorage`.
 - Identidad visual: usa su propio dashboard y navegación interna; la página pasa `chrome={false}` a `ModuleShell` para omitir el encabezado y contenedor visual estándar.
 
-### Cosas Prestadas
+### Recordatorios
 
-- Ruta y registro: `Cosas Prestadas`, `/prestamos`; dominio `features/prestamos/`.
-- Ensamblador, hook y service: `LoansDashboard`, `useLoans`, `loansService.ts`.
-- Tabla: `personal_loans`.
-- Función: separa préstamos activos del historial de devueltos. Las categorías son una lista cerrada e incluyen `No lo sé`; los activos sin categoría tienen vista propia y pueden reclasificarse después.
+- Ruta y registro: `Recordatorios`, `/prestamos`; dominios `features/recordatorios/` y `features/prestamos/`.
+- Presenta dos vertientes independientes: `Cosas prestadas`, que conserva el comportamiento anterior, y `Compras con tarjeta de crédito` para compras compartidas.
+- Cosas prestadas usa `LoansDashboard`, `useLoans`, `loansService.ts` y la tabla `personal_loans`. Separa préstamos activos del historial de devueltos. Las categorías son una lista cerrada e incluyen `No lo sé`; los activos sin categoría tienen vista propia y pueden reclasificarse después.
 - La búsqueda cubre objeto, persona y notas. Los activos admiten filtro por categoría, edición, marcado como devuelto y eliminación; el historial permite restaurar o eliminar.
 - No existe fecha esperada de devolución ni estado vencido: solo `active` y `returned`, con fecha real de devolución.
 - El formulario inicia oculto y se abre con `+ Registrar préstamo`. La fecha inicial del préstamo se construye con año, mes y día locales del navegador, no mediante una conversión UTC.
+- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`. Organiza cada causa como un caso con participantes fijos y varias compras; una compra nueva recalcula lo asignado sin eliminar pagos anteriores.
+- Cada compra conserva tarjeta, fecha, monto y dos oportunidades completas de pago (normalmente 15 y 30); no divide el aporte entre esas fechas. Los pagos se acumulan por persona y producen estados pendiente, parcial, pagado o vencido.
+- Registra tarjetas por nombre, banco y días de corte/pago, y cuentas de ahorro únicamente por nombre. El dinero recibido permanece sin destinar hasta registrarlo como abono a tarjeta, ahorro u otro uso.
+- La vista para captura muestra el resumen grupal de un caso, oculta la información financiera privada y permite destacar opcionalmente a una persona sin ocultar a las demás.
 
 ## Shells y componentes compartidos
 
@@ -94,8 +97,9 @@ Archivos existentes, no ejecutados durante esta revisión:
 - `supabase/spotify_family.sql`: crea `spotify_family_members` y `spotify_family_payments`.
 - `supabase/pretty_salon.sql`: crea las cinco tablas `pretty_salon_*` indicadas arriba y la función de pertenencia al equipo.
 - `supabase/personal_loans.sql`: crea `personal_loans`.
+- `supabase/recordatorios_compras.sql`: crea las ocho tablas `reminder_*` para tarjetas, cuentas, casos, participantes, compras, participaciones, pagos y destinos del dinero.
 
-Los cuatro archivos habilitan RLS y definen políticas para usuarios autenticados. Dinero Tanque, Spotify Familiar y Préstamos aplican aislamiento por `owner_id`. Pretty Salon combina propiedad con membresía compartida por correo para lectura, actualización y eliminación; su tabla de miembros solo permite a cada usuario leer su propia fila. Cronograma también escribe `owner_id` desde el código, pero su esquema y sus políticas no están documentados por un SQL del repositorio.
+Los cinco archivos habilitan RLS y definen políticas para usuarios autenticados. Dinero Tanque, Spotify Familiar, Recordatorios y Préstamos aplican aislamiento por `owner_id`. Pretty Salon combina propiedad con membresía compartida por correo para lectura, actualización y eliminación; su tabla de miembros solo permite a cada usuario leer su propia fila. Cronograma también escribe `owner_id` desde el código, pero su esquema y sus políticas no están documentados por un SQL del repositorio.
 
 ## Decisiones vigentes
 
@@ -105,11 +109,11 @@ Los cuatro archivos habilitan RLS y definen políticas para usuarios autenticado
 - Compatibilidad prioritaria con Supabase Free y Vercel Hobby/Free.
 - Cronograma administra una única lista vigente de materias: no conserva ciclos; sus eliminaciones y limpieza también descartan las actividades relacionadas.
 - Pretty Salon conserva una identidad visual y navegación interna propias.
-- Cosas Prestadas mantiene el historial de devueltos separado y permite reclasificar `No lo sé`.
+- Recordatorios conserva el historial de cosas devueltas separado y permite reclasificar `No lo sé`; las compras compartidas se consolidan por caso, pero cada transacción mantiene su tarjeta y fechas.
 
 ## Pendientes operativos conocidos
 
-No hay pendientes operativos comprobados en esta revisión.
+- Ejecutar `supabase/recordatorios_compras.sql` en Supabase antes de utilizar la vertiente `Compras con tarjeta de crédito`.
 
 ## Guía de lectura selectiva
 
@@ -117,5 +121,5 @@ No hay pendientes operativos comprobados en esta revisión.
 - Dinero Tanque: `app/dinero-tanque/`, `features/dinero-tanque/`, `lib/dineroTanque.ts` y `supabase/dinero_tanque.sql`; sumar `config/modules.ts` solo para cambios de registro.
 - Spotify Familiar: `app/spotify-familiar/`, `features/spotify-familiar/` y `supabase/spotify_family.sql`; sumar `config/modules.ts` solo para cambios de registro.
 - Pretty Salon: `app/pretty-escritorio/`, `features/pretty-salon/`, `supabase/pretty_salon.sql` y, para acceso, `lib/moduleAccess.ts`; sumar `config/modules.ts` solo para cambios de registro.
-- Cosas Prestadas: `app/prestamos/`, `features/prestamos/` y `supabase/personal_loans.sql`; sumar `config/modules.ts` solo para cambios de registro.
+- Recordatorios: `app/prestamos/`, `features/recordatorios/`, `features/prestamos/`, `supabase/recordatorios_compras.sql` y `supabase/personal_loans.sql`; sumar `config/modules.ts` para cambios de registro.
 - Login, selector o shells: `app/login/`, `app/modulos/`, `components/layout/`, `components/ui/`, `lib/supabaseClient.ts`, `lib/moduleAccess.ts` y `config/modules.ts` según el cambio.

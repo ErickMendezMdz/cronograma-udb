@@ -43,8 +43,9 @@ export const appModules: AppModule[] = [
   },
   {
     id: "prestamos",
-    name: "Cosas Prestadas",
-    description: "Control rápido de cosas que has prestado",
+    name: "Recordatorios",
+    description:
+      "Controla cosas prestadas y compras compartidas pagadas con tarjeta.",
     href: "/prestamos",
     accent: "blue",
     status: "Nuevo",
