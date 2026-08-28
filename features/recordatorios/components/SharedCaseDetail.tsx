@@ -36,6 +36,14 @@ const inputClass = "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 
 const statusLabel = { own: "Parte propia", pending: "Pendiente", partial: "Parcial", paid: "Pagado", overdue: "Vencido" };
 const statusClass = { own: "bg-blue-500/15 text-blue-200", pending: "bg-slate-700 text-slate-200", partial: "bg-amber-500/15 text-amber-200", paid: "bg-emerald-500/15 text-emerald-200", overdue: "bg-red-500/15 text-red-200" };
 
+function formatCompactDate(value: string | null) {
+  if (!value) return "—";
+  return new Date(`${value}T12:00:00`).toLocaleDateString("es-SV", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export function SharedCaseDetail(props: Props) {
   const { sharedCase, cards, accounts, saving } = props;
   const balances = useMemo(() => getParticipantBalances(sharedCase), [sharedCase]);
@@ -107,6 +115,17 @@ export function SharedCaseDetail(props: Props) {
               <p className="shrink-0 text-[10px] text-slate-300">{formatDate(today)} · {sharedCase.purchases.length} {sharedCase.purchases.length === 1 ? "compra" : "compras"}</p>
             </div>
           </div>
+          <div className="border-t border-emerald-300/20 bg-emerald-400/10 px-3 py-2">
+            <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Detalle de la deuda</p>
+            <div className="space-y-1">
+              {sharedCase.purchases.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-xs font-medium text-white">{item.description} <span className="font-normal text-slate-300">· {formatDate(item.purchaseDate)}</span></p>
+                  <p className="shrink-0 text-sm font-semibold text-white">{formatMoney(item.amount)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-3 border-y border-slate-700 bg-slate-950/60 text-center">
             <div className="px-2 py-2"><p className="text-[10px] text-slate-400">Monto deuda</p><p className="text-sm font-semibold text-white">{formatMoney(totals.purchaseTotal)}</p></div>
             <div className="border-x border-slate-700 px-2 py-2"><p className="text-[10px] text-slate-400">Recibido</p><p className="text-sm font-semibold text-emerald-300">{formatMoney(totals.received)}</p></div>
@@ -115,17 +134,14 @@ export function SharedCaseDetail(props: Props) {
           {totals.roundingAdjustment > 0.005 ? <p className="border-b border-slate-700 bg-slate-950/40 px-3 py-1 text-center text-[10px] text-slate-400">Ajuste para aportes iguales: +{formatMoney(totals.roundingAdjustment)}</p> : null}
           <div className="divide-y divide-slate-700 px-3">
             {balances.map((balance) => (
-              <article key={balance.id} className={`-mx-3 px-3 py-2 transition ${highlighted === balance.id ? "bg-amber-400/15 ring-1 ring-inset ring-amber-300/50" : ""}`}>
+              <article key={balance.id} className={`-mx-3 px-3 py-1.5 transition ${highlighted === balance.id ? "bg-amber-400/15 ring-1 ring-inset ring-amber-300/50" : ""}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-white">{balance.name}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div><p className="mt-0.5 text-[10px] text-slate-400">Pagó {formatMoney(balance.paid)} · Debe {formatMoney(balance.pending)}</p></div>
+                  <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-white">{balance.name}</p><span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div></div>
                   <p className="shrink-0 text-right text-xs font-semibold text-white">{formatMoney(balance.assigned)}</p>
                 </div>
-                {!balance.isOwner && balance.pending > 0 ? <p className="mt-0.5 text-[10px] text-slate-300">{balance.status === "overdue" ? `Vencido desde ${formatDate(balance.firstOpportunity)}` : `Puede pagar: ${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p> : null}
+                <div className="mt-0.5 flex items-center justify-between gap-2 text-[9px]"><p className="text-slate-400">Pagó {formatMoney(balance.paid)} · Debe {formatMoney(balance.pending)}</p>{!balance.isOwner && balance.pending > 0 ? <p className="shrink-0 text-slate-300">{balance.status === "overdue" ? `Venció ${formatCompactDate(balance.firstOpportunity)}` : `Paga ${formatCompactDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatCompactDate(balance.secondOpportunity)}` : ""}`}</p> : null}</div>
               </article>
             ))}
-          </div>
-          <div className="border-t border-slate-700 px-3 py-2 text-[10px] leading-4 text-slate-400">
-            {sharedCase.purchases.map((item) => <p key={item.id}>{formatDate(item.purchaseDate)} · {item.description}: {formatMoney(item.amount)}</p>)}
           </div>
         </section>
         <p className="mt-3 text-center text-xs text-slate-500 print:hidden">Esta vista oculta tarjetas, cuentas y el destino privado del dinero. Toma la captura desde aquí.</p>
