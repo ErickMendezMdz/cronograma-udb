@@ -111,7 +111,7 @@ export function SharedCaseDetail(props: Props) {
         <section className="overflow-hidden rounded-2xl border border-emerald-300/40 bg-[#08131f] shadow-xl shadow-black/40">
           <div className="bg-gradient-to-r from-emerald-500/25 to-blue-500/20 px-4 py-3">
             <div className="flex items-end justify-between gap-3">
-              <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">Resumen compartido</p><h1 className="mt-1 text-xl font-semibold text-white">{sharedCase.title}</h1></div>
+              <h1 className="text-xl font-semibold text-white">{sharedCase.title}</h1>
               <p className="shrink-0 text-[10px] text-slate-300">{formatDate(today)} · {sharedCase.purchases.length} {sharedCase.purchases.length === 1 ? "compra" : "compras"}</p>
             </div>
           </div>
@@ -131,7 +131,6 @@ export function SharedCaseDetail(props: Props) {
             <div className="border-x border-slate-700 px-2 py-2"><p className="text-[10px] text-slate-400">Recibido</p><p className="text-sm font-semibold text-emerald-300">{formatMoney(totals.received)}</p></div>
             <div className="px-2 py-2"><p className="text-[10px] text-slate-400">Pendiente</p><p className="text-sm font-semibold text-amber-200">{formatMoney(totals.pending)}</p></div>
           </div>
-          {totals.roundingAdjustment > 0.005 ? <p className="border-b border-slate-700 bg-slate-950/40 px-3 py-1 text-center text-[10px] text-slate-400">Ajuste para aportes iguales: +{formatMoney(totals.roundingAdjustment)}</p> : null}
           <div className="divide-y divide-slate-700 px-3">
             {balances.map((balance) => (
               <article key={balance.id} className={`-mx-3 px-3 py-1.5 transition ${highlighted === balance.id ? "bg-amber-400/15 ring-1 ring-inset ring-amber-300/50" : ""}`}>
@@ -139,7 +138,7 @@ export function SharedCaseDetail(props: Props) {
                   <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-white">{balance.name}</p><span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div></div>
                   <p className="shrink-0 text-right text-xs font-semibold text-white">{formatMoney(balance.assigned)}</p>
                 </div>
-                <div className="mt-0.5 flex items-center justify-between gap-2 text-[9px]"><p className="text-slate-400">Pagó {formatMoney(balance.paid)} · Debe {formatMoney(balance.pending)}</p>{!balance.isOwner && balance.pending > 0 ? <p className="shrink-0 text-slate-300">{balance.status === "overdue" ? `Venció ${formatCompactDate(balance.firstOpportunity)}` : `Paga ${formatCompactDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatCompactDate(balance.secondOpportunity)}` : ""}`}</p> : null}</div>
+                <div className="mt-0.5 flex items-center justify-between gap-2 text-[9px]"><p className="text-slate-400">Pagó {formatMoney(balance.paid)} · Debe {formatMoney(balance.pending)}</p>{!balance.isOwner && balance.pending > 0 ? <p className="shrink-0 text-slate-300">{balance.status === "overdue" ? `Venció ${formatCompactDate(balance.firstOpportunity)}` : `Puede pagar ${formatCompactDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatCompactDate(balance.secondOpportunity)}` : ""}`}</p> : null}</div>
               </article>
             ))}
           </div>
