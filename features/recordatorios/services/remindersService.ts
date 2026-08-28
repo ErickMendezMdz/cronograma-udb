@@ -124,6 +124,24 @@ export async function createAccount(supabase: SupabaseClient, ownerId: string, n
   return supabase.from("reminder_savings_accounts").insert({ owner_id: ownerId, name: name.trim() });
 }
 
+export async function updateCard(
+  supabase: SupabaseClient,
+  ownerId: string,
+  cardId: string,
+  input: Omit<CreditCard, "id" | "active">
+) {
+  return supabase
+    .from("reminder_credit_cards")
+    .update({
+      name: input.name.trim(),
+      bank: input.bank.trim(),
+      cut_day: input.cutDay,
+      due_day: input.dueDay,
+    })
+    .eq("id", cardId)
+    .eq("owner_id", ownerId);
+}
+
 async function insertPurchase(
   supabase: SupabaseClient,
   ownerId: string,
@@ -220,6 +238,55 @@ export async function createAllocation(supabase: SupabaseClient, ownerId: string
     account_id: input.destinationType === "savings" ? input.accountId : null,
     notes: input.notes.trim(),
   });
+}
+
+export async function deletePayment(
+  supabase: SupabaseClient,
+  ownerId: string,
+  paymentId: string
+) {
+  return supabase
+    .from("reminder_shared_payments")
+    .delete()
+    .eq("id", paymentId)
+    .eq("owner_id", ownerId);
+}
+
+export async function deleteAllocation(
+  supabase: SupabaseClient,
+  ownerId: string,
+  allocationId: string
+) {
+  return supabase
+    .from("reminder_fund_allocations")
+    .delete()
+    .eq("id", allocationId)
+    .eq("owner_id", ownerId);
+}
+
+export async function deletePurchase(
+  supabase: SupabaseClient,
+  ownerId: string,
+  purchaseId: string
+) {
+  return supabase
+    .from("reminder_shared_purchases")
+    .delete()
+    .eq("id", purchaseId)
+    .eq("owner_id", ownerId);
+}
+
+export async function updatePurchaseDescription(
+  supabase: SupabaseClient,
+  ownerId: string,
+  purchaseId: string,
+  description: string
+) {
+  return supabase
+    .from("reminder_shared_purchases")
+    .update({ description: description.trim() })
+    .eq("id", purchaseId)
+    .eq("owner_id", ownerId);
 }
 
 export async function closeCase(supabase: SupabaseClient, ownerId: string, caseId: string, closed: boolean) {

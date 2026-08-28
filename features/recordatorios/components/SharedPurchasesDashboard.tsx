@@ -31,7 +31,7 @@ export function SharedPurchasesDashboard() {
   if (!data.supabase) return <div className="rounded-2xl border border-red-900 bg-red-950/30 p-5 text-red-100">{data.configError ?? "Falta configurar Supabase."}</div>;
 
   if (selected) {
-    return <SharedCaseDetail sharedCase={selected} cards={data.cards} accounts={data.accounts} saving={data.saving} onAddPurchase={data.addPurchase} onPayment={data.createPayment} onAllocation={data.createAllocation} onToggleClosed={data.toggleClosed} onBack={() => setSelectedId(null)} />;
+    return <SharedCaseDetail sharedCase={selected} cards={data.cards} accounts={data.accounts} saving={data.saving} onAddPurchase={data.addPurchase} onPayment={data.createPayment} onAllocation={data.createAllocation} onDeletePayment={data.deletePayment} onDeleteAllocation={data.deleteAllocation} onDeletePurchase={data.deletePurchase} onUpdatePurchaseDescription={data.updatePurchaseDescription} onToggleClosed={data.toggleClosed} onBack={() => setSelectedId(null)} />;
   }
 
   return (
@@ -43,7 +43,7 @@ export function SharedPurchasesDashboard() {
         {[['Total que me deben', formatMoney(global.pending)], ['Personas con saldo', global.debtors], ['Saldos vencidos', global.overdue], ['Recibido sin destinar', formatMoney(global.unallocated)]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{value}</p></article>)}
       </section>
 
-      <div className="mt-5"><ReminderSetup cards={data.cards} accounts={data.accounts} saving={data.saving} onCreateCard={data.createCard} onCreateAccount={data.createAccount} /></div>
+      <div className="mt-5"><ReminderSetup cards={data.cards} accounts={data.accounts} saving={data.saving} onCreateCard={data.createCard} onUpdateCard={data.updateCard} onCreateAccount={data.createAccount} /></div>
       {creating ? <div className="mt-5"><SharedCaseForm cards={data.cards} saving={data.saving} onSave={data.createCase} onCancel={() => setCreating(false)} /></div> : null}
       {data.error ? <div className="mt-5 rounded-2xl border border-red-900 bg-red-950/30 p-4 text-sm text-red-100">{data.error}</div> : null}
       {data.loading ? <p className="mt-5 text-sm text-slate-400">Actualizando...</p> : null}

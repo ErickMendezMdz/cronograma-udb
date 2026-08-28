@@ -28,6 +28,10 @@ type Props = {
   onAddPurchase: (sharedCase: SharedCase, input: NewPurchaseInput) => Promise<boolean>;
   onPayment: (input: NewPaymentInput) => Promise<boolean>;
   onAllocation: (input: NewAllocationInput) => Promise<boolean>;
+  onDeletePayment: (paymentId: string) => Promise<boolean>;
+  onDeleteAllocation: (allocationId: string) => Promise<boolean>;
+  onDeletePurchase: (purchaseId: string) => Promise<boolean>;
+  onUpdatePurchaseDescription: (purchaseId: string, description: string) => Promise<boolean>;
   onToggleClosed: (sharedCase: SharedCase) => Promise<boolean>;
   onBack: () => void;
 };
@@ -51,6 +55,8 @@ export function SharedCaseDetail(props: Props) {
   const [panel, setPanel] = useState<"none" | "purchase" | "payment" | "allocation">("none");
   const [shareMode, setShareMode] = useState(false);
   const [highlighted, setHighlighted] = useState("");
+  const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
+  const [purchaseDescription, setPurchaseDescription] = useState("");
   const today = localDateValue();
   const dates = nextPayOpportunities(today);
   const [purchase, setPurchase] = useState({ description: "", amount: "", purchaseDate: today, cardId: "", firstOpportunity: dates[0], secondOpportunity: dates[1] });
@@ -101,6 +107,35 @@ export function SharedCaseDetail(props: Props) {
     }
   }
 
+  async function deletePayment(paymentId: string) {
+    const linkedDestinations = sharedCase.allocations.filter(
+      (item) => item.paymentId === paymentId
+    ).length;
+    const detail = linkedDestinations
+      ? ` También se eliminarán ${linkedDestinations} ${linkedDestinations === 1 ? "destino vinculado" : "destinos vinculados"}.`
+      : "";
+    if (!window.confirm(`¿Eliminar esta transferencia? El saldo de la persona se recalculará.${detail}`)) return;
+    await props.onDeletePayment(paymentId);
+  }
+
+  async function deleteAllocation(allocationId: string) {
+    if (!window.confirm("¿Eliminar este destino? El dinero volverá a aparecer como recibido sin destinar.")) return;
+    await props.onDeleteAllocation(allocationId);
+  }
+
+  async function deletePurchase(purchaseId: string) {
+    if (!window.confirm("¿Eliminar esta compra? Se recalculará lo asignado y lo pendiente de todas las personas.")) return;
+    await props.onDeletePurchase(purchaseId);
+  }
+
+  async function savePurchaseDescription(purchaseId: string) {
+    if (!purchaseDescription.trim()) return;
+    if (await props.onUpdatePurchaseDescription(purchaseId, purchaseDescription)) {
+      setEditingPurchaseId(null);
+      setPurchaseDescription("");
+    }
+  }
+
   if (shareMode) {
     return (
       <div className="mx-auto max-w-xl">
@@ -118,12 +153,15 @@ export function SharedCaseDetail(props: Props) {
           <div className="border-t border-emerald-300/20 bg-emerald-400/10 px-3 py-2">
             <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Detalle de la deuda</p>
             <div className="space-y-1">
-              {sharedCase.purchases.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3">
-                  <p className="min-w-0 truncate text-xs font-medium text-white">{item.description} <span className="font-normal text-slate-300">· {formatDate(item.purchaseDate)}</span></p>
-                  <p className="shrink-0 text-sm font-semibold text-white">{formatMoney(item.amount)}</p>
-                </div>
-              ))}
+              {sharedCase.purchases.map((item) => {
+                const card = cards.find((entry) => entry.id === item.cardId);
+                return (
+                  <div key={item.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate text-xs font-semibold text-white">{card?.name ?? "Tarjeta sin asignar"}</p><p className="truncate text-[9px] text-slate-300">{item.description} · {formatDate(item.purchaseDate)}</p></div>
+                    <p className="shrink-0 text-sm font-semibold text-white">{formatMoney(item.amount)}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
           <div className="grid grid-cols-3 border-y border-slate-700 bg-slate-950/60 text-center">
@@ -173,7 +211,61 @@ export function SharedCaseDetail(props: Props) {
 
       <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70"><div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Quién debe y quién pagó</h2><p className="mt-1 text-sm text-slate-400">El aporte se paga completo en cualquiera de las dos oportunidades.</p></div><div className="divide-y divide-slate-700">{balances.map((balance) => <article key={balance.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(90px,0.7fr))_minmax(180px,1fr)] md:items-center"><div><p className="font-semibold text-slate-100">{balance.name}</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div><div><p className="text-xs text-slate-500">Asignado</p><p className="text-sm text-slate-200">{formatMoney(balance.assigned)}</p></div><div><p className="text-xs text-slate-500">Pagado</p><p className="text-sm text-emerald-300">{formatMoney(balance.paid)}</p></div><div><p className="text-xs text-slate-500">Debe</p><p className="text-sm font-semibold text-amber-200">{formatMoney(balance.pending)}</p></div><div><p className="text-xs text-slate-500">Oportunidades</p><p className="text-sm text-slate-300">{balance.isOwner || balance.pending <= 0 ? "—" : balance.status === "overdue" ? `Venció ${formatDate(balance.firstOpportunity)}` : `${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p></div></article>)}</div></section>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-2"><div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Compras del caso</h2><div className="mt-3 space-y-3">{sharedCase.purchases.map((item) => { const card = cards.find((entry) => entry.id === item.cardId); const cardDates = estimatedCardDates(item.purchaseDate, card); return <article key={item.id} className="rounded-xl bg-slate-950/60 p-3"><div className="flex justify-between gap-3"><div><p className="font-medium text-slate-100">{item.description}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.purchaseDate)} · {card?.name ?? "Sin tarjeta"}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></div><p className="mt-2 text-xs text-slate-400">Oportunidades: {formatDate(item.firstOpportunity)} o {formatDate(item.secondOpportunity)}</p>{cardDates ? <p className="mt-1 text-xs text-blue-300">Corte estimado: {formatDate(cardDates.cutDate)} · Pago de tarjeta: {formatDate(cardDates.dueDate)}</p> : null}</article>; })}</div></div><div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Destino del dinero recibido</h2><div className="mt-3 space-y-3">{sharedCase.allocations.length ? sharedCase.allocations.map((item) => { const destination = item.destinationType === "card" ? cards.find((card) => card.id === item.cardId)?.name : item.destinationType === "savings" ? accounts.find((account) => account.id === item.accountId)?.name : "Otro"; return <article key={item.id} className="flex justify-between gap-3 rounded-xl bg-slate-950/60 p-3"><div><p className="text-sm text-slate-200">{destination ?? "Destino eliminado"}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.allocatedAt)}{item.notes ? ` · ${item.notes}` : ""}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></article>; }) : <p className="text-sm text-slate-500">Todavía no has destinado dinero recibido.</p>}</div></div></section>
+      <section className="mt-6 grid gap-4 xl:grid-cols-3">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 className="font-semibold text-slate-100">Compras del caso</h2>
+          <div className="mt-3 space-y-3">
+            {sharedCase.purchases.length ? sharedCase.purchases.map((item) => {
+              const card = cards.find((entry) => entry.id === item.cardId);
+              const cardDates = estimatedCardDates(item.purchaseDate, card);
+              return (
+                <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
+                  <div className="flex justify-between gap-3"><div><p className="font-medium text-slate-100">{item.description}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.purchaseDate)} · {card?.name ?? "Sin tarjeta"}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></div>
+                  {editingPurchaseId === item.id ? <div className="mt-3"><label><span className="text-xs text-slate-400">Descripción de la deuda</span><input className={inputClass} value={purchaseDescription} onChange={(event) => setPurchaseDescription(event.target.value)} /></label><div className="mt-2 flex gap-2"><Button disabled={saving || !purchaseDescription.trim()} onClick={() => savePurchaseDescription(item.id)}>Guardar</Button><Button variant="secondary" onClick={() => setEditingPurchaseId(null)}>Cancelar</Button></div></div> : null}
+                  <p className="mt-2 text-xs text-slate-400">Oportunidades: {formatDate(item.firstOpportunity)} o {formatDate(item.secondOpportunity)}</p>
+                  {cardDates ? <p className="mt-1 text-xs text-blue-300">Corte estimado: {formatDate(cardDates.cutDate)} · Pago de tarjeta: {formatDate(cardDates.dueDate)}</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-2"><Button variant="secondary" className="px-3 py-1.5" disabled={saving} onClick={() => { setEditingPurchaseId(item.id); setPurchaseDescription(item.description); }}>Editar descripción</Button><Button variant="danger" className="px-3 py-1.5" disabled={saving} onClick={() => deletePurchase(item.id)}>Eliminar compra</Button></div>
+                </article>
+              );
+            }) : <p className="text-sm text-slate-500">Este caso ya no tiene compras.</p>}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 className="font-semibold text-slate-100">Transferencias recibidas</h2>
+          <div className="mt-3 space-y-3">
+            {sharedCase.payments.length ? sharedCase.payments.map((item) => {
+              const person = balances.find((balance) => balance.id === item.participantId);
+              const linkedCount = sharedCase.allocations.filter((allocationItem) => allocationItem.paymentId === item.id).length;
+              return (
+                <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
+                  <div className="flex justify-between gap-3"><div><p className="text-sm font-medium text-slate-100">{person?.name ?? "Persona eliminada"}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.paidAt)} · {item.method}</p></div><p className="font-semibold text-emerald-300">{formatMoney(item.amount)}</p></div>
+                  {item.notes ? <p className="mt-2 text-xs text-slate-400">{item.notes}</p> : null}
+                  {linkedCount ? <p className="mt-2 text-xs text-amber-200">{linkedCount} {linkedCount === 1 ? "destino vinculado" : "destinos vinculados"}</p> : null}
+                  <Button variant="danger" className="mt-3 px-3 py-1.5" disabled={saving} onClick={() => deletePayment(item.id)}>Eliminar transferencia</Button>
+                </article>
+              );
+            }) : <p className="text-sm text-slate-500">Todavía no hay transferencias registradas.</p>}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 className="font-semibold text-slate-100">Destino del dinero recibido</h2>
+          <div className="mt-3 space-y-3">
+            {sharedCase.allocations.length ? sharedCase.allocations.map((item) => {
+              const destination = item.destinationType === "card" ? cards.find((card) => card.id === item.cardId)?.name : item.destinationType === "savings" ? accounts.find((account) => account.id === item.accountId)?.name : "Otro";
+              const sourcePayment = sharedCase.payments.find((paymentItem) => paymentItem.id === item.paymentId);
+              const sourcePerson = balances.find((balance) => balance.id === sourcePayment?.participantId);
+              return (
+                <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
+                  <div className="flex justify-between gap-3"><div><p className="text-sm text-slate-200">{destination ?? "Destino eliminado"}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.allocatedAt)} · abono de {sourcePerson?.name ?? "persona eliminada"}{item.notes ? ` · ${item.notes}` : ""}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></div>
+                  <Button variant="danger" className="mt-3 px-3 py-1.5" disabled={saving} onClick={() => deleteAllocation(item.id)}>Eliminar destino</Button>
+                </article>
+              );
+            }) : <p className="text-sm text-slate-500">Todavía no has destinado dinero recibido.</p>}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

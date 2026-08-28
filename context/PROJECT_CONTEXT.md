@@ -73,6 +73,8 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - Los aportes se redondean hacia arriba al centavo para que todos paguen exactamente lo mismo; cualquier diferencia mínima queda identificada como ajuste de redondeo. El participante `Yo` representa la parte propia y se muestra al final.
 - Registra tarjetas por nombre, banco y días de corte/pago, y cuentas de ahorro únicamente por nombre. El dinero recibido permanece sin destinar hasta registrarlo como abono a tarjeta, ahorro u otro uso.
 - La vista para captura muestra el resumen grupal de un caso, oculta la información financiera privada y permite destacar opcionalmente a una persona sin ocultar a las demás.
+- El detalle del caso permite eliminar compras, transferencias y destinos con confirmación. Eliminar una transferencia elimina también sus destinos vinculados; los saldos se recalculan después de cada eliminación.
+- Las tarjetas pueden editarse desde la configuración y la descripción de cada compra desde el caso. En la captura, el detalle identifica primero la tarjeta acreedora y conserva debajo el motivo y la fecha de la compra.
 
 ## Shells y componentes compartidos
 

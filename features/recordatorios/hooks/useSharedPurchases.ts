@@ -12,7 +12,12 @@ import {
   createCard as createCardRecord,
   createPayment as createPaymentRecord,
   createSharedCase,
+  deleteAllocation as deleteAllocationRecord,
+  deletePayment as deletePaymentRecord,
+  deletePurchase as deletePurchaseRecord,
   loadReminderData,
+  updateCard as updateCardRecord,
+  updatePurchaseDescription as updatePurchaseDescriptionRecord,
 } from "@/features/recordatorios/services/remindersService";
 import type {
   CreditCard,
@@ -99,6 +104,14 @@ export function useSharedPurchases() {
     return run(() => createAccountRecord(supabase, userId, name));
   }, [run, supabase, userId]);
 
+  const updateCard = useCallback(async (
+    cardId: string,
+    input: Omit<CreditCard, "id" | "active">
+  ) => {
+    if (!supabase || !userId) return false;
+    return run(() => updateCardRecord(supabase, userId, cardId, input));
+  }, [run, supabase, userId]);
+
   const createCase = useCallback(async (input: NewCaseInput) => {
     if (!supabase || !userId) return false;
     return run(() => createSharedCase(supabase, userId, input));
@@ -119,6 +132,34 @@ export function useSharedPurchases() {
     return run(() => createAllocationRecord(supabase, userId, input));
   }, [run, supabase, userId]);
 
+  const deletePayment = useCallback(async (paymentId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deletePaymentRecord(supabase, userId, paymentId));
+  }, [run, supabase, userId]);
+
+  const deleteAllocation = useCallback(async (allocationId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deleteAllocationRecord(supabase, userId, allocationId));
+  }, [run, supabase, userId]);
+
+  const deletePurchase = useCallback(async (purchaseId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deletePurchaseRecord(supabase, userId, purchaseId));
+  }, [run, supabase, userId]);
+
+  const updatePurchaseDescription = useCallback(async (
+    purchaseId: string,
+    description: string
+  ) => {
+    if (!supabase || !userId) return false;
+    return run(() => updatePurchaseDescriptionRecord(
+      supabase,
+      userId,
+      purchaseId,
+      description
+    ));
+  }, [run, supabase, userId]);
+
   const toggleClosed = useCallback(async (sharedCase: SharedCase) => {
     if (!supabase || !userId) return false;
     return run(() => closeCaseRecord(supabase, userId, sharedCase.id, sharedCase.status === "active"));
@@ -132,7 +173,8 @@ export function useSharedPurchases() {
 
   return {
     checking, loading, saving, supabase, configError, email, cards, accounts,
-    cases, error, setError, createCard, createAccount, createCase, addPurchase,
-    createPayment, createAllocation, toggleClosed, logout,
+    cases, error, setError, createCard, createAccount, updateCard, createCase, addPurchase,
+    createPayment, createAllocation, deletePayment, deleteAllocation,
+    deletePurchase, updatePurchaseDescription, toggleClosed, logout,
   };
 }
