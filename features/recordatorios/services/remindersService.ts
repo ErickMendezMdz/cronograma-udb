@@ -289,6 +289,32 @@ export async function updatePurchaseDescription(
     .eq("owner_id", ownerId);
 }
 
+export async function updateParticipantName(
+  supabase: SupabaseClient,
+  ownerId: string,
+  participantId: string,
+  name: string
+) {
+  return supabase
+    .from("reminder_case_participants")
+    .update({ name: name.trim() })
+    .eq("id", participantId)
+    .eq("owner_id", ownerId);
+}
+
+export async function deleteParticipant(
+  supabase: SupabaseClient,
+  ownerId: string,
+  participantId: string
+) {
+  return supabase
+    .from("reminder_case_participants")
+    .delete()
+    .eq("id", participantId)
+    .eq("owner_id", ownerId)
+    .eq("is_owner", false);
+}
+
 export async function closeCase(supabase: SupabaseClient, ownerId: string, caseId: string, closed: boolean) {
   return supabase
     .from("reminder_shared_cases")

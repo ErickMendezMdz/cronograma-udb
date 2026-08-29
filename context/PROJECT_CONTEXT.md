@@ -68,13 +68,14 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - La búsqueda cubre objeto, persona y notas. Los activos admiten filtro por categoría, edición, marcado como devuelto y eliminación; el historial permite restaurar o eliminar.
 - No existe fecha esperada de devolución ni estado vencido: solo `active` y `returned`, con fecha real de devolución.
 - El formulario inicia oculto y se abre con `+ Registrar préstamo`. La fecha inicial del préstamo se construye con año, mes y día locales del navegador, no mediante una conversión UTC.
-- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`. Organiza cada causa como un caso con participantes fijos y varias compras; una compra nueva recalcula lo asignado sin eliminar pagos anteriores.
+- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`. Organiza cada causa como un caso con participantes editables y varias compras; una compra nueva recalcula lo asignado sin eliminar pagos anteriores.
 - Cada compra conserva tarjeta, fecha, monto y dos oportunidades completas de pago (normalmente 15 y 30); no divide el aporte entre esas fechas. Los pagos se acumulan por persona y producen estados pendiente, parcial, pagado o vencido.
 - Los aportes se redondean hacia arriba al centavo para que todos paguen exactamente lo mismo; cualquier diferencia mínima queda identificada como ajuste de redondeo. El participante `Yo` representa la parte propia y se muestra al final.
 - Registra tarjetas por nombre, banco y días de corte/pago, y cuentas de ahorro únicamente por nombre. El dinero recibido permanece sin destinar hasta registrarlo como abono a tarjeta, ahorro u otro uso.
 - La vista para captura muestra el resumen grupal de un caso, oculta la información financiera privada y permite destacar opcionalmente a una persona sin ocultar a las demás.
 - El detalle del caso permite eliminar compras, transferencias y destinos con confirmación. Eliminar una transferencia elimina también sus destinos vinculados; los saldos se recalculan después de cada eliminación.
 - Las tarjetas pueden editarse desde la configuración y la descripción de cada compra desde el caso. En la captura, el detalle identifica primero la tarjeta acreedora y conserva debajo el motivo y la fecha de la compra.
+- Los nombres de los participantes pueden editarse dentro del caso. Un hermano puede quitarse con confirmación; se eliminan sus pagos y destinos asociados y los aportes se redistribuyen entre los participantes restantes. La parte propia no puede eliminarse.
 
 ## Shells y componentes compartidos
 

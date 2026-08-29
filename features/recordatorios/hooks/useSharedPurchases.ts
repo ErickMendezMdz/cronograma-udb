@@ -13,10 +13,12 @@ import {
   createPayment as createPaymentRecord,
   createSharedCase,
   deleteAllocation as deleteAllocationRecord,
+  deleteParticipant as deleteParticipantRecord,
   deletePayment as deletePaymentRecord,
   deletePurchase as deletePurchaseRecord,
   loadReminderData,
   updateCard as updateCardRecord,
+  updateParticipantName as updateParticipantNameRecord,
   updatePurchaseDescription as updatePurchaseDescriptionRecord,
 } from "@/features/recordatorios/services/remindersService";
 import type {
@@ -160,6 +162,24 @@ export function useSharedPurchases() {
     ));
   }, [run, supabase, userId]);
 
+  const updateParticipantName = useCallback(async (
+    participantId: string,
+    name: string
+  ) => {
+    if (!supabase || !userId) return false;
+    return run(() => updateParticipantNameRecord(
+      supabase,
+      userId,
+      participantId,
+      name
+    ));
+  }, [run, supabase, userId]);
+
+  const deleteParticipant = useCallback(async (participantId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deleteParticipantRecord(supabase, userId, participantId));
+  }, [run, supabase, userId]);
+
   const toggleClosed = useCallback(async (sharedCase: SharedCase) => {
     if (!supabase || !userId) return false;
     return run(() => closeCaseRecord(supabase, userId, sharedCase.id, sharedCase.status === "active"));
@@ -175,6 +195,7 @@ export function useSharedPurchases() {
     checking, loading, saving, supabase, configError, email, cards, accounts,
     cases, error, setError, createCard, createAccount, updateCard, createCase, addPurchase,
     createPayment, createAllocation, deletePayment, deleteAllocation,
-    deletePurchase, updatePurchaseDescription, toggleClosed, logout,
+    deletePurchase, updatePurchaseDescription, updateParticipantName,
+    deleteParticipant, toggleClosed, logout,
   };
 }

@@ -32,6 +32,8 @@ type Props = {
   onDeleteAllocation: (allocationId: string) => Promise<boolean>;
   onDeletePurchase: (purchaseId: string) => Promise<boolean>;
   onUpdatePurchaseDescription: (purchaseId: string, description: string) => Promise<boolean>;
+  onUpdateParticipantName: (participantId: string, name: string) => Promise<boolean>;
+  onDeleteParticipant: (participantId: string) => Promise<boolean>;
   onToggleClosed: (sharedCase: SharedCase) => Promise<boolean>;
   onBack: () => void;
 };
@@ -57,6 +59,8 @@ export function SharedCaseDetail(props: Props) {
   const [highlighted, setHighlighted] = useState("");
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
   const [purchaseDescription, setPurchaseDescription] = useState("");
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [participantName, setParticipantName] = useState("");
   const today = localDateValue();
   const dates = nextPayOpportunities(today);
   const [purchase, setPurchase] = useState({ description: "", amount: "", purchaseDate: today, cardId: "", firstOpportunity: dates[0], secondOpportunity: dates[1] });
@@ -136,6 +140,43 @@ export function SharedCaseDetail(props: Props) {
     }
   }
 
+  async function saveParticipantName(participantId: string) {
+    const normalizedName = participantName.trim().toLocaleLowerCase("es");
+    if (!normalizedName) return;
+    const duplicate = sharedCase.participants.some(
+      (item) =>
+        item.id !== participantId &&
+        item.name.trim().toLocaleLowerCase("es") === normalizedName
+    );
+    if (duplicate) {
+      alert("Ya existe otro participante con ese nombre.");
+      return;
+    }
+    if (await props.onUpdateParticipantName(participantId, participantName)) {
+      setEditingParticipantId(null);
+      setParticipantName("");
+    }
+  }
+
+  async function deleteParticipant(participantId: string) {
+    if (sharedCase.participants.length <= 2) {
+      alert("El caso debe conservar al menos una persona además de tu parte.");
+      return;
+    }
+    const payments = sharedCase.payments.filter(
+      (item) => item.participantId === participantId
+    );
+    const paymentIds = new Set(payments.map((item) => item.id));
+    const destinations = sharedCase.allocations.filter((item) =>
+      paymentIds.has(item.paymentId)
+    ).length;
+    const detail = payments.length || destinations
+      ? ` También se eliminarán ${payments.length} ${payments.length === 1 ? "transferencia" : "transferencias"} y ${destinations} ${destinations === 1 ? "destino" : "destinos"} vinculados.`
+      : "";
+    if (!window.confirm(`¿Quitar a esta persona del caso? Los montos se repartirán nuevamente entre quienes permanezcan.${detail}`)) return;
+    await props.onDeleteParticipant(participantId);
+  }
+
   if (shareMode) {
     return (
       <div className="mx-auto max-w-xl">
@@ -209,7 +250,26 @@ export function SharedCaseDetail(props: Props) {
 
       {panel === "allocation" ? <form onSubmit={submitAllocation} className="mt-4 rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4"><h2 className="font-semibold text-slate-100">¿Qué hiciste con el dinero?</h2><p className="mt-1 text-xs text-slate-500">Disponible sin destinar: {formatMoney(totals.unallocated)}</p><div className="mt-4 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Abono recibido</span><select className={inputClass} value={allocation.paymentId} onChange={(e) => { const source = sharedCase.payments.find((item) => item.id === e.target.value); const used = sharedCase.allocations.filter((item) => item.paymentId === e.target.value).reduce((sum, item) => sum + item.amount, 0); setAllocation({ ...allocation, paymentId: e.target.value, amount: source ? String(Math.max(0, source.amount - used).toFixed(2)) : "" }); }} required><option value="">Seleccionar</option>{sharedCase.payments.map((item) => { const person = balances.find((balance) => balance.id === item.participantId); const used = sharedCase.allocations.filter((entry) => entry.paymentId === item.id).reduce((sum, entry) => sum + entry.amount, 0); const available = Math.max(0, item.amount - used); return <option key={item.id} value={item.id} disabled={available <= 0}>{person?.name} · {formatDate(item.paidAt)} · disponible {formatMoney(available)}</option>; })}</select></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={allocation.amount} onChange={(e) => setAllocation({ ...allocation, amount: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Destino</span><select className={inputClass} value={allocation.destinationType} onChange={(e) => setAllocation({ ...allocation, destinationType: e.target.value as NewAllocationInput["destinationType"] })}><option value="card">Abono a tarjeta</option><option value="savings">Guardado en cuenta</option><option value="other">Otro</option></select></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={allocation.allocatedAt} onChange={(e) => setAllocation({ ...allocation, allocatedAt: e.target.value })} required /></label>{allocation.destinationType === "card" ? <label><span className="text-sm text-slate-400">Tarjeta</span><select className={inputClass} value={allocation.cardId} onChange={(e) => setAllocation({ ...allocation, cardId: e.target.value })} required><option value="">Seleccionar</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label> : null}{allocation.destinationType === "savings" ? <label><span className="text-sm text-slate-400">Cuenta</span><select className={inputClass} value={allocation.accountId} onChange={(e) => setAllocation({ ...allocation, accountId: e.target.value })} required><option value="">Seleccionar</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label> : null}<label className="md:col-span-2"><span className="text-sm text-slate-400">Nota</span><input className={inputClass} value={allocation.notes} onChange={(e) => setAllocation({ ...allocation, notes: e.target.value })} /></label></div><Button type="submit" disabled={saving || totals.unallocated <= 0} className="mt-4">Guardar destino</Button></form> : null}
 
-      <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70"><div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Quién debe y quién pagó</h2><p className="mt-1 text-sm text-slate-400">El aporte se paga completo en cualquiera de las dos oportunidades.</p></div><div className="divide-y divide-slate-700">{balances.map((balance) => <article key={balance.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(90px,0.7fr))_minmax(180px,1fr)] md:items-center"><div><p className="font-semibold text-slate-100">{balance.name}</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div><div><p className="text-xs text-slate-500">Asignado</p><p className="text-sm text-slate-200">{formatMoney(balance.assigned)}</p></div><div><p className="text-xs text-slate-500">Pagado</p><p className="text-sm text-emerald-300">{formatMoney(balance.paid)}</p></div><div><p className="text-xs text-slate-500">Debe</p><p className="text-sm font-semibold text-amber-200">{formatMoney(balance.pending)}</p></div><div><p className="text-xs text-slate-500">Oportunidades</p><p className="text-sm text-slate-300">{balance.isOwner || balance.pending <= 0 ? "—" : balance.status === "overdue" ? `Venció ${formatDate(balance.firstOpportunity)}` : `${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p></div></article>)}</div></section>
+      <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70">
+        <div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Quién debe y quién pagó</h2><p className="mt-1 text-sm text-slate-400">Edita nombres o quita a un hermano. El aporte se paga completo en cualquiera de las dos oportunidades.</p></div>
+        <div className="divide-y divide-slate-700">
+          {balances.map((balance) => (
+            <article key={balance.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(90px,0.7fr))_minmax(180px,1fr)] md:items-center">
+              <div>
+                {editingParticipantId === balance.id ? (
+                  <div><input className={inputClass} value={participantName} onChange={(event) => setParticipantName(event.target.value)} autoFocus /><div className="mt-2 flex flex-wrap gap-2"><Button disabled={saving || !participantName.trim()} className="px-3 py-1.5" onClick={() => saveParticipantName(balance.id)}>Guardar</Button><Button variant="secondary" className="px-3 py-1.5" onClick={() => setEditingParticipantId(null)}>Cancelar</Button></div></div>
+                ) : (
+                  <><p className="font-semibold text-slate-100">{balance.name}</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span><div className="mt-2 flex flex-wrap gap-2"><Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => { setEditingParticipantId(balance.id); setParticipantName(balance.name); }}>Editar nombre</Button>{!balance.isOwner ? <Button variant="danger" className="px-2 py-1 text-xs" disabled={saving} onClick={() => deleteParticipant(balance.id)}>Quitar</Button> : null}</div></>
+                )}
+              </div>
+              <div><p className="text-xs text-slate-500">Asignado</p><p className="text-sm text-slate-200">{formatMoney(balance.assigned)}</p></div>
+              <div><p className="text-xs text-slate-500">Pagado</p><p className="text-sm text-emerald-300">{formatMoney(balance.paid)}</p></div>
+              <div><p className="text-xs text-slate-500">Debe</p><p className="text-sm font-semibold text-amber-200">{formatMoney(balance.pending)}</p></div>
+              <div><p className="text-xs text-slate-500">Oportunidades</p><p className="text-sm text-slate-300">{balance.isOwner || balance.pending <= 0 ? "—" : balance.status === "overdue" ? `Venció ${formatDate(balance.firstOpportunity)}` : `${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p></div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="mt-6 grid gap-4 xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">

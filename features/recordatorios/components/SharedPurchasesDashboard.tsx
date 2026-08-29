@@ -31,7 +31,7 @@ export function SharedPurchasesDashboard() {
   if (!data.supabase) return <div className="rounded-2xl border border-red-900 bg-red-950/30 p-5 text-red-100">{data.configError ?? "Falta configurar Supabase."}</div>;
 
   if (selected) {
-    return <SharedCaseDetail sharedCase={selected} cards={data.cards} accounts={data.accounts} saving={data.saving} onAddPurchase={data.addPurchase} onPayment={data.createPayment} onAllocation={data.createAllocation} onDeletePayment={data.deletePayment} onDeleteAllocation={data.deleteAllocation} onDeletePurchase={data.deletePurchase} onUpdatePurchaseDescription={data.updatePurchaseDescription} onToggleClosed={data.toggleClosed} onBack={() => setSelectedId(null)} />;
+    return <SharedCaseDetail sharedCase={selected} cards={data.cards} accounts={data.accounts} saving={data.saving} onAddPurchase={data.addPurchase} onPayment={data.createPayment} onAllocation={data.createAllocation} onDeletePayment={data.deletePayment} onDeleteAllocation={data.deleteAllocation} onDeletePurchase={data.deletePurchase} onUpdatePurchaseDescription={data.updatePurchaseDescription} onUpdateParticipantName={data.updateParticipantName} onDeleteParticipant={data.deleteParticipant} onToggleClosed={data.toggleClosed} onBack={() => setSelectedId(null)} />;
   }
 
   return (
