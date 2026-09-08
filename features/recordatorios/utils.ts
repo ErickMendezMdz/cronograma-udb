@@ -111,8 +111,7 @@ export function getParticipantBalances(sharedCase: SharedCase): ParticipantBalan
     );
 
     let status: ParticipantBalance["status"] = "pending";
-    if (participant.isOwner) status = "own";
-    else if (pending <= 0.005) status = "paid";
+    if (pending <= 0.005) status = "paid";
     else if (hasOverdueAmount) status = "overdue";
     else if (paid > 0) status = "partial";
 
@@ -131,12 +130,14 @@ export function getParticipantBalances(sharedCase: SharedCase): ParticipantBalan
 
 export function caseTotals(sharedCase: SharedCase) {
   const balances = getParticipantBalances(sharedCase);
-  const collectable = balances
-    .filter((balance) => !balance.isOwner)
-    .reduce((sum, balance) => sum + balance.assigned, 0);
-  const received = balances
-    .filter((balance) => !balance.isOwner)
-    .reduce((sum, balance) => sum + balance.paid, 0);
+  const collectable = balances.reduce(
+    (sum, balance) => sum + balance.assigned,
+    0
+  );
+  const received = balances.reduce(
+    (sum, balance) => sum + balance.paid,
+    0
+  );
   const allocated = sharedCase.allocations.reduce(
     (sum, allocation) => sum + allocation.amount,
     0

@@ -74,7 +74,7 @@ export type ParticipantBalance = SharedParticipant & {
   assigned: number;
   paid: number;
   pending: number;
-  status: "own" | "pending" | "partial" | "paid" | "overdue";
+  status: "pending" | "partial" | "paid" | "overdue";
   firstOpportunity: string | null;
   secondOpportunity: string | null;
 };
