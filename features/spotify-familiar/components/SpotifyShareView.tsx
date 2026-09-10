@@ -26,6 +26,12 @@ type SpotifyShareViewProps = {
 };
 
 type ShareMode = "all" | "person";
+type ShareMonth = {
+  month: string;
+  status: "paid" | "partial" | "pending";
+  paid: number;
+  pending: number;
+};
 
 const monthStatusClass = {
   paid: "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
@@ -83,6 +89,38 @@ export function SpotifyShareView({
 
     return months;
   }, [selectedRow]);
+  const orderedSelectedMonths = useMemo(() => {
+    const pending: ShareMonth[] = [];
+    const paid: ShareMonth[] = [];
+
+    if (!selectedRow) return { pending, paid };
+
+    for (const month of selectedMonths) {
+      const status = getMonthStatus(
+        selectedRow.member,
+        month,
+        paymentsByMonth
+      );
+      if (status === "inactive" || status === "future") continue;
+
+      const paidAmount = getPaidAmount(
+        paymentsByMonth,
+        selectedRow.member.id,
+        month
+      );
+      const item: ShareMonth = {
+        month,
+        status,
+        paid: paidAmount,
+        pending: Math.max(selectedRow.member.monthlyAmount - paidAmount, 0),
+      };
+
+      if (status === "paid") paid.unshift(item);
+      else pending.push(item);
+    }
+
+    return { pending, paid };
+  }, [paymentsByMonth, selectedMonths, selectedRow]);
 
   return (
     <div className="mx-auto max-w-xl">
@@ -281,58 +319,81 @@ export function SpotifyShareView({
                 ) : null}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {selectedMonths.map((month) => {
-                  const status = getMonthStatus(
-                    selectedRow.member,
-                    month,
-                    paymentsByMonth
-                  );
-                  if (status === "inactive" || status === "future") return null;
-
-                  const paid = getPaidAmount(
-                    paymentsByMonth,
-                    selectedRow.member.id,
-                    month
-                  );
-                  const pending = Math.max(
-                    selectedRow.member.monthlyAmount - paid,
-                    0
-                  );
-
-                  return (
-                    <article
-                      key={month}
-                      className={`rounded-xl border px-3 py-2 ${monthStatusClass[status]}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold capitalize">
-                          {formatMonth(month)}
+              <section className="mt-3 rounded-xl border border-amber-300/25 bg-amber-400/5 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-100">
+                    Pendiente por pagar
+                  </p>
+                  <span className="text-[10px] text-amber-200">
+                    {orderedSelectedMonths.pending.length}{" "}
+                    {orderedSelectedMonths.pending.length === 1 ? "mes" : "meses"}
+                  </span>
+                </div>
+                {orderedSelectedMonths.pending.length === 0 ? (
+                  <p className="mt-3 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+                    No tiene pagos pendientes
+                  </p>
+                ) : (
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {orderedSelectedMonths.pending.map((item) => (
+                      <article
+                        key={item.month}
+                        className={`rounded-xl border px-3 py-2 ${monthStatusClass[item.status]}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold capitalize">
+                            {formatMonth(item.month)}
+                          </p>
+                          <span className="text-[8px] font-semibold uppercase tracking-wide">
+                            {monthStatusLabel[item.status]}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-amber-50">
+                          {money.format(item.pending)} pendiente
                         </p>
-                        <span className="text-[8px] font-semibold uppercase tracking-wide">
-                          {monthStatusLabel[status]}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs font-semibold">
-                        {status === "paid"
-                          ? `${money.format(paid)} pagado`
-                          : `${money.format(pending)} pendiente`}
-                      </p>
-                      {status === "partial" ? (
-                        <p className="mt-0.5 text-[9px] opacity-80">
-                          Pagó {money.format(paid)}
-                        </p>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
+                        {item.status === "partial" ? (
+                          <p className="mt-0.5 text-[9px] opacity-80">
+                            Ya pagó {money.format(item.paid)}
+                          </p>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
 
-              <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[9px] text-slate-400">
-                <span><span className="text-emerald-300">●</span> Pagado</span>
-                <span><span className="text-blue-300">●</span> Parcial</span>
-                <span><span className="text-amber-300">●</span> Pendiente</span>
-              </div>
+              <section className="mt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200">
+                    Meses pagados
+                  </p>
+                  <span className="text-[10px] text-slate-400">
+                    {orderedSelectedMonths.paid.length}{" "}
+                    {orderedSelectedMonths.paid.length === 1 ? "mes" : "meses"}
+                  </span>
+                </div>
+                {orderedSelectedMonths.paid.length === 0 ? (
+                  <p className="mt-2 text-[10px] text-slate-500">
+                    Todavía no hay meses pagados.
+                  </p>
+                ) : (
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    {orderedSelectedMonths.paid.map((item) => (
+                      <article
+                        key={item.month}
+                        className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1.5 text-emerald-100"
+                      >
+                        <p className="truncate text-[10px] font-semibold capitalize">
+                          {formatMonth(item.month)}
+                        </p>
+                        <p className="mt-0.5 text-[9px] text-emerald-200">
+                          {money.format(item.paid)} pagado
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         ) : null}
