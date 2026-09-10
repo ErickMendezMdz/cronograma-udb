@@ -251,15 +251,15 @@ export function SpotifyShareView({
 
             <div className="mt-5 grid grid-cols-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-950/60 text-center">
               <div className="px-3 py-3">
-                <p className="text-[10px] text-slate-400">Cuota mensual</p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {money.format(selectedRow.member.monthlyAmount)}
-                </p>
-              </div>
-              <div className="border-l border-slate-700 px-3 py-3">
                 <p className="text-[10px] text-slate-400">Total pendiente</p>
                 <p className="mt-1 text-lg font-semibold text-amber-200">
                   {money.format(selectedRow.debt.total)}
+                </p>
+              </div>
+              <div className="border-l border-slate-700 px-3 py-3">
+                <p className="text-[10px] text-slate-400">Cuota mensual</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {money.format(selectedRow.member.monthlyAmount)}
                 </p>
               </div>
             </div>
