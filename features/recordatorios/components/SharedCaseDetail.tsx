@@ -31,7 +31,8 @@ type Props = {
   onDeletePayment: (paymentId: string) => Promise<boolean>;
   onDeleteAllocation: (allocationId: string) => Promise<boolean>;
   onDeletePurchase: (purchaseId: string) => Promise<boolean>;
-  onUpdatePurchaseDescription: (purchaseId: string, description: string) => Promise<boolean>;
+  onUpdateCase: (caseId: string, title: string, notes: string) => Promise<boolean>;
+  onUpdatePurchase: (sharedCase: SharedCase, purchaseId: string, input: NewPurchaseInput) => Promise<boolean>;
   onUpdateParticipantName: (participantId: string, name: string) => Promise<boolean>;
   onDeleteParticipant: (participantId: string) => Promise<boolean>;
   onToggleClosed: (sharedCase: SharedCase) => Promise<boolean>;
@@ -57,8 +58,11 @@ export function SharedCaseDetail(props: Props) {
   const [panel, setPanel] = useState<"none" | "purchase" | "payment" | "allocation">("none");
   const [shareMode, setShareMode] = useState(false);
   const [highlighted, setHighlighted] = useState("");
+  const [caseFormOpen, setCaseFormOpen] = useState(false);
+  const [caseTitle, setCaseTitle] = useState(sharedCase.title);
+  const [caseNotes, setCaseNotes] = useState(sharedCase.notes);
   const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
-  const [purchaseDescription, setPurchaseDescription] = useState("");
+  const [editingPurchase, setEditingPurchase] = useState<NewPurchaseInput | null>(null);
   const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
   const [participantName, setParticipantName] = useState("");
   const today = localDateValue();
@@ -132,11 +136,29 @@ export function SharedCaseDetail(props: Props) {
     await props.onDeletePurchase(purchaseId);
   }
 
-  async function savePurchaseDescription(purchaseId: string) {
-    if (!purchaseDescription.trim()) return;
-    if (await props.onUpdatePurchaseDescription(purchaseId, purchaseDescription)) {
+  async function saveCase(event: FormEvent) {
+    event.preventDefault();
+    if (!caseTitle.trim()) return;
+    if (await props.onUpdateCase(sharedCase.id, caseTitle, caseNotes)) {
+      setCaseFormOpen(false);
+    }
+  }
+
+  async function savePurchase(purchaseId: string) {
+    if (
+      !editingPurchase?.description.trim() ||
+      editingPurchase.amount <= 0 ||
+      !editingPurchase.purchaseDate ||
+      !editingPurchase.firstOpportunity ||
+      !editingPurchase.secondOpportunity
+    ) return;
+    if (editingPurchase.secondOpportunity <= editingPurchase.firstOpportunity) {
+      alert("La segunda oportunidad debe ser posterior a la primera.");
+      return;
+    }
+    if (await props.onUpdatePurchase(sharedCase, purchaseId, editingPurchase)) {
       setEditingPurchaseId(null);
-      setPurchaseDescription("");
+      setEditingPurchase(null);
     }
   }
 
@@ -231,8 +253,19 @@ export function SharedCaseDetail(props: Props) {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><button onClick={props.onBack} className="text-sm font-semibold text-blue-300 hover:text-blue-200">← Todos los casos</button><h1 className="mt-2 text-3xl font-semibold text-slate-100">{sharedCase.title}</h1><p className="mt-1 text-sm text-slate-400">{sharedCase.purchases.length} compras · {sharedCase.participants.length} participantes · {sharedCase.status === "closed" ? "Cerrado" : "Activo"}</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setShareMode(true)}>Vista para captura</Button><Button variant="ghost" onClick={() => props.onToggleClosed(sharedCase)} disabled={saving}>{sharedCase.status === "active" ? "Cerrar caso" : "Reabrir caso"}</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => { setCaseTitle(sharedCase.title); setCaseNotes(sharedCase.notes); setCaseFormOpen(true); }}>Editar caso</Button><Button variant="secondary" onClick={() => setShareMode(true)}>Vista para captura</Button><Button variant="ghost" onClick={() => props.onToggleClosed(sharedCase)} disabled={saving}>{sharedCase.status === "active" ? "Cerrar caso" : "Reabrir caso"}</Button></div>
       </div>
+
+      {caseFormOpen ? (
+        <form onSubmit={saveCase} className="mt-5 rounded-2xl border border-blue-500/30 bg-slate-900/80 p-4">
+          <h2 className="font-semibold text-slate-100">Editar caso</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label><span className="text-sm text-slate-400">Nombre del caso</span><input className={inputClass} value={caseTitle} onChange={(event) => setCaseTitle(event.target.value)} required /></label>
+            <label><span className="text-sm text-slate-400">Notas privadas</span><input className={inputClass} value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} /></label>
+          </div>
+          <div className="mt-4 flex gap-2"><Button type="submit" disabled={saving || !caseTitle.trim()}>Guardar caso</Button><Button variant="secondary" onClick={() => setCaseFormOpen(false)}>Cancelar</Button></div>
+        </form>
+      ) : null}
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[['Compras', totals.purchaseTotal], ['Por recoger', totals.collectable], ['Recogido', totals.received], ['Pendiente', totals.pending], ['Sin destinar', totals.unallocated]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{formatMoney(Number(value))}</p></article>)}
@@ -281,10 +314,20 @@ export function SharedCaseDetail(props: Props) {
               return (
                 <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
                   <div className="flex justify-between gap-3"><div><p className="font-medium text-slate-100">{item.description}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.purchaseDate)} · {card?.name ?? "Sin tarjeta"}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></div>
-                  {editingPurchaseId === item.id ? <div className="mt-3"><label><span className="text-xs text-slate-400">Descripción de la deuda</span><input className={inputClass} value={purchaseDescription} onChange={(event) => setPurchaseDescription(event.target.value)} /></label><div className="mt-2 flex gap-2"><Button disabled={saving || !purchaseDescription.trim()} onClick={() => savePurchaseDescription(item.id)}>Guardar</Button><Button variant="secondary" onClick={() => setEditingPurchaseId(null)}>Cancelar</Button></div></div> : null}
+                  {editingPurchaseId === item.id && editingPurchase ? (
+                    <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 sm:grid-cols-2">
+                      <label className="sm:col-span-2"><span className="text-xs text-slate-400">Descripción</span><input className={inputClass} value={editingPurchase.description} onChange={(event) => setEditingPurchase({ ...editingPurchase, description: event.target.value })} /></label>
+                      <label><span className="text-xs text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={editingPurchase.amount} onChange={(event) => setEditingPurchase({ ...editingPurchase, amount: Number(event.target.value) })} /></label>
+                      <label><span className="text-xs text-slate-400">Fecha de compra</span><input className={inputClass} type="date" value={editingPurchase.purchaseDate} onChange={(event) => { const value = event.target.value; if (!value) { setEditingPurchase({ ...editingPurchase, purchaseDate: value }); return; } const opportunities = nextPayOpportunities(value); setEditingPurchase({ ...editingPurchase, purchaseDate: value, firstOpportunity: opportunities[0], secondOpportunity: opportunities[1] }); }} required /></label>
+                      <label className="sm:col-span-2"><span className="text-xs text-slate-400">Tarjeta</span><select className={inputClass} value={editingPurchase.cardId ?? ""} onChange={(event) => setEditingPurchase({ ...editingPurchase, cardId: event.target.value || null })}><option value="">Sin asignar</option>{cards.map((cardItem) => <option key={cardItem.id} value={cardItem.id}>{cardItem.name}</option>)}</select></label>
+                      <label><span className="text-xs text-slate-400">Primera oportunidad</span><input className={inputClass} type="date" value={editingPurchase.firstOpportunity} onChange={(event) => setEditingPurchase({ ...editingPurchase, firstOpportunity: event.target.value })} required /></label>
+                      <label><span className="text-xs text-slate-400">Segunda oportunidad</span><input className={inputClass} type="date" min={editingPurchase.firstOpportunity} value={editingPurchase.secondOpportunity} onChange={(event) => setEditingPurchase({ ...editingPurchase, secondOpportunity: event.target.value })} required /></label>
+                      <div className="flex flex-wrap gap-2 sm:col-span-2"><Button disabled={saving || !editingPurchase.description.trim() || editingPurchase.amount <= 0} onClick={() => savePurchase(item.id)}>Guardar compra</Button><Button variant="secondary" onClick={() => { setEditingPurchaseId(null); setEditingPurchase(null); }}>Cancelar</Button></div>
+                    </div>
+                  ) : null}
                   <p className="mt-2 text-xs text-slate-400">Oportunidades: {formatDate(item.firstOpportunity)} o {formatDate(item.secondOpportunity)}</p>
                   {cardDates ? <p className="mt-1 text-xs text-blue-300">Corte estimado: {formatDate(cardDates.cutDate)} · Pago de tarjeta: {formatDate(cardDates.dueDate)}</p> : null}
-                  <div className="mt-3 flex flex-wrap gap-2"><Button variant="secondary" className="px-3 py-1.5" disabled={saving} onClick={() => { setEditingPurchaseId(item.id); setPurchaseDescription(item.description); }}>Editar descripción</Button><Button variant="danger" className="px-3 py-1.5" disabled={saving} onClick={() => deletePurchase(item.id)}>Eliminar compra</Button></div>
+                  <div className="mt-3 flex flex-wrap gap-2"><Button variant="secondary" className="px-3 py-1.5" disabled={saving} onClick={() => { setEditingPurchaseId(item.id); setEditingPurchase({ description: item.description, amount: item.amount, purchaseDate: item.purchaseDate, cardId: item.cardId, firstOpportunity: item.firstOpportunity, secondOpportunity: item.secondOpportunity }); }}>Editar compra</Button><Button variant="danger" className="px-3 py-1.5" disabled={saving} onClick={() => deletePurchase(item.id)}>Eliminar compra</Button></div>
                 </article>
               );
             }) : <p className="text-sm text-slate-500">Este caso ya no tiene compras.</p>}

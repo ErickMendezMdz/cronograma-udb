@@ -74,7 +74,7 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - Registra tarjetas por nombre, banco y días de corte/pago, y cuentas de ahorro únicamente por nombre. Todos los aportes, incluida la parte propia, permanecen sin destinar hasta registrarlos como abono a tarjeta, ahorro u otro uso.
 - La vista para captura muestra el resumen grupal de un caso, oculta la información financiera privada y permite destacar opcionalmente a una persona sin ocultar a las demás.
 - El detalle del caso permite eliminar compras, aportes y destinos con confirmación. Eliminar un aporte elimina también sus destinos vinculados; los saldos se recalculan después de cada eliminación.
-- Las tarjetas pueden editarse desde la configuración y la descripción de cada compra desde el caso. En la captura, el detalle identifica primero la tarjeta acreedora y conserva debajo el motivo y la fecha de la compra.
+- Las tarjetas pueden editarse desde la configuración. Cada caso permite editar su nombre y notas; cada compra permite editar descripción, monto, fecha, tarjeta y oportunidades. Cambiar el monto recalcula los aportes y saldos sin borrar pagos existentes. En la captura, el detalle identifica primero la tarjeta acreedora y conserva debajo el motivo y la fecha de la compra.
 - Los nombres de los participantes pueden editarse dentro del caso. Un hermano puede quitarse con confirmación; se eliminan sus pagos y destinos asociados y los aportes se redistribuyen entre los participantes restantes. `Yo` no puede eliminarse, pero sí registra su aporte como cualquier participante.
 
 ## Shells y componentes compartidos

@@ -276,16 +276,48 @@ export async function deletePurchase(
     .eq("owner_id", ownerId);
 }
 
-export async function updatePurchaseDescription(
+export async function updateSharedCase(
   supabase: SupabaseClient,
   ownerId: string,
-  purchaseId: string,
-  description: string
+  caseId: string,
+  title: string,
+  notes: string
 ) {
   return supabase
+    .from("reminder_shared_cases")
+    .update({ title: title.trim(), notes: notes.trim() })
+    .eq("id", caseId)
+    .eq("owner_id", ownerId);
+}
+
+export async function updatePurchase(
+  supabase: SupabaseClient,
+  ownerId: string,
+  sharedCase: SharedCase,
+  purchaseId: string,
+  input: NewPurchaseInput
+) {
+  const purchaseResult = await supabase
     .from("reminder_shared_purchases")
-    .update({ description: description.trim() })
+    .update({
+      description: input.description.trim(),
+      purchase_date: input.purchaseDate,
+      amount: input.amount,
+      card_id: input.cardId,
+      first_opportunity: input.firstOpportunity,
+      second_opportunity: input.secondOpportunity,
+    })
     .eq("id", purchaseId)
+    .eq("owner_id", ownerId);
+  if (purchaseResult.error) return purchaseResult;
+
+  const equalShare =
+    Math.ceil(Math.round(input.amount * 100) / sharedCase.participants.length) /
+    100;
+  return supabase
+    .from("reminder_purchase_shares")
+    .update({ amount: equalShare })
+    .eq("purchase_id", purchaseId)
     .eq("owner_id", ownerId);
 }
 
