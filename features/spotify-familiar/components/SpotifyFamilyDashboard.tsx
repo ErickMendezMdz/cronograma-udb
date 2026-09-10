@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { MemberForm } from "@/features/spotify-familiar/components/MemberForm";
 import { PaymentForm } from "@/features/spotify-familiar/components/PaymentForm";
 import { PaymentMatrix } from "@/features/spotify-familiar/components/PaymentMatrix";
 import { PaymentSummary } from "@/features/spotify-familiar/components/PaymentSummary";
 import { PendingMonthsList } from "@/features/spotify-familiar/components/PendingMonthsList";
+import { SpotifyShareView } from "@/features/spotify-familiar/components/SpotifyShareView";
 import { useSpotifyFamily } from "@/features/spotify-familiar/hooks/useSpotifyFamily";
 import {
   formatDate,
@@ -97,6 +99,7 @@ function PaymentHistory({
 
 export function SpotifyFamilyDashboard() {
   const spotifyFamily = useSpotifyFamily();
+  const [shareMode, setShareMode] = useState(false);
 
   if (spotifyFamily.checking) {
     return (
@@ -122,6 +125,16 @@ export function SpotifyFamilyDashboard() {
     );
   }
 
+  if (shareMode) {
+    return (
+      <SpotifyShareView
+        members={spotifyFamily.sortedMembers}
+        paymentsByMonth={spotifyFamily.paymentsByMonth}
+        onBack={() => setShareMode(false)}
+      />
+    );
+  }
+
   return (
     <div className="text-slate-100">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -139,9 +152,14 @@ export function SpotifyFamilyDashboard() {
           </p>
         </div>
 
-        <Button onClick={spotifyFamily.handleLogout} variant="secondary">
-          Salir
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setShareMode(true)} variant="secondary">
+            Vista para compartir
+          </Button>
+          <Button onClick={spotifyFamily.handleLogout} variant="secondary">
+            Salir
+          </Button>
+        </div>
       </div>
 
       {spotifyFamily.loadingData ? (
