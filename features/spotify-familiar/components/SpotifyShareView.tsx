@@ -3,10 +3,13 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import {
+  addMonths,
   currentMonthISO,
   findFirstPaymentMonth,
   formatDate,
   formatMonth,
+  getMonthStatus,
+  getPaidAmount,
   getMemberDebt,
   money,
   todayISO,
@@ -23,6 +26,18 @@ type SpotifyShareViewProps = {
 };
 
 type ShareMode = "all" | "person";
+
+const monthStatusClass = {
+  paid: "border-emerald-400/40 bg-emerald-500/15 text-emerald-100",
+  partial: "border-blue-400/40 bg-blue-500/15 text-blue-100",
+  pending: "border-amber-300/50 bg-amber-400/15 text-amber-50",
+} as const;
+
+const monthStatusLabel = {
+  paid: "Pagado",
+  partial: "Parcial",
+  pending: "Pendiente",
+} as const;
 
 const selectClass =
   "mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-green-400";
@@ -55,6 +70,19 @@ export function SpotifyShareView({
     rows.find((row) => row.member.id === selectedMemberId) ?? rows[0];
   const totalDebt = rows.reduce((sum, row) => sum + row.debt.total, 0);
   const currentMonth = formatMonth(currentMonthISO());
+  const selectedMonths = useMemo(() => {
+    if (!selectedRow) return [];
+
+    const months: string[] = [];
+    let month = selectedRow.member.startMonth;
+
+    while (month <= currentMonthISO()) {
+      months.push(month);
+      month = addMonths(month, 1);
+    }
+
+    return months;
+  }, [selectedRow]);
 
   return (
     <div className="mx-auto max-w-xl">
@@ -236,24 +264,75 @@ export function SpotifyShareView({
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-3">
-              {selectedRow.debt.total <= 0 ? (
-                <>
-                  <p className="font-semibold text-emerald-200">
-                    No tiene pagos pendientes
+            <div className="mt-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-white">
+                    Historial por mes
                   </p>
-                  <p className="mt-1 text-xs text-slate-300">
-                    Siguiente pago: {formatMonth(selectedRow.nextMonth)}
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Pagos realizados y saldos pendientes
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs text-slate-400">Meses pendientes</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {selectedRow.debt.pendingMonths.map(formatMonth).join(", ")}
+                </div>
+                {selectedRow.debt.total <= 0 ? (
+                  <p className="text-right text-[10px] font-semibold text-emerald-200">
+                    Próximo: {formatMonth(selectedRow.nextMonth)}
                   </p>
-                </>
-              )}
+                ) : null}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {selectedMonths.map((month) => {
+                  const status = getMonthStatus(
+                    selectedRow.member,
+                    month,
+                    paymentsByMonth
+                  );
+                  if (status === "inactive" || status === "future") return null;
+
+                  const paid = getPaidAmount(
+                    paymentsByMonth,
+                    selectedRow.member.id,
+                    month
+                  );
+                  const pending = Math.max(
+                    selectedRow.member.monthlyAmount - paid,
+                    0
+                  );
+
+                  return (
+                    <article
+                      key={month}
+                      className={`rounded-xl border px-3 py-2 ${monthStatusClass[status]}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold capitalize">
+                          {formatMonth(month)}
+                        </p>
+                        <span className="text-[8px] font-semibold uppercase tracking-wide">
+                          {monthStatusLabel[status]}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold">
+                        {status === "paid"
+                          ? `${money.format(paid)} pagado`
+                          : `${money.format(pending)} pendiente`}
+                      </p>
+                      {status === "partial" ? (
+                        <p className="mt-0.5 text-[9px] opacity-80">
+                          Pagó {money.format(paid)}
+                        </p>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[9px] text-slate-400">
+                <span><span className="text-emerald-300">●</span> Pagado</span>
+                <span><span className="text-blue-300">●</span> Parcial</span>
+                <span><span className="text-amber-300">●</span> Pendiente</span>
+              </div>
             </div>
           </div>
         ) : null}

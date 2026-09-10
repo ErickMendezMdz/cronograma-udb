@@ -50,7 +50,7 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - Ruta y registro: `Spotify Familiar`, `/spotify-familiar`; dominio `features/spotify-familiar/`.
 - Ensamblador, hook y service: `SpotifyFamilyDashboard`, `useSpotifyFamily`, `spotifyFamilyService.ts`.
 - Tablas: `spotify_family_members` y `spotify_family_payments`.
-- Función: administra miembros, cuota mensual, mes de inicio y estado activo; presenta matriz mensual, pendientes y totales; registra pagos manuales o rápidos al pendiente más antiguo y permite eliminar miembros o pagos. Su vista para compartir genera una tarjeta compacta para captura con todos los miembros activos —y destaque opcional— o únicamente la cuenta de una persona, mostrando cuota, saldo y meses pendientes sin controles administrativos.
+- Función: administra miembros, cuota mensual, mes de inicio y estado activo; presenta matriz mensual, pendientes y totales; registra pagos manuales o rápidos al pendiente más antiguo y permite eliminar miembros o pagos. Su vista para compartir genera una tarjeta compacta para captura con todos los miembros activos —y destaque opcional— o únicamente la cuenta de una persona; el estado individual representa gráficamente cada mes pagado, parcial o pendiente, además de la cuota y el saldo, sin controles administrativos.
 
 ### Pretty Salon
 
