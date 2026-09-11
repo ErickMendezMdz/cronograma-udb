@@ -68,14 +68,13 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - La búsqueda cubre objeto, persona y notas. Los activos admiten filtro por categoría, edición, marcado como devuelto y eliminación; el historial permite restaurar o eliminar.
 - No existe fecha esperada de devolución ni estado vencido: solo `active` y `returned`, con fecha real de devolución.
 - El formulario inicia oculto y se abre con `+ Registrar préstamo`. La fecha inicial del préstamo se construye con año, mes y día locales del navegador, no mediante una conversión UTC.
-- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`. Organiza cada causa como un caso con participantes editables y varias compras; una compra nueva recalcula lo asignado sin eliminar pagos anteriores.
-- Cada compra conserva tarjeta, fecha, monto y dos oportunidades completas de pago (normalmente 15 y 30); no divide el aporte entre esas fechas. Los pagos se acumulan por persona y producen estados pendiente, parcial, pagado o vencido.
-- Los aportes se redondean hacia arriba al centavo para que todos paguen exactamente lo mismo. El participante `Yo` se muestra al final, no puede eliminarse y participa en el mismo flujo de saldo, oportunidades, aporte y destino que las demás personas.
-- Registra tarjetas por nombre, banco y días de corte/pago, y cuentas de ahorro únicamente por nombre. Todos los aportes, incluida la parte propia, permanecen sin destinar hasta registrarlos como abono a tarjeta, ahorro u otro uso.
+- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`. Organiza cada causa como un caso con responsables editables y varias compras a tasa cero; cada compra conserva su propio calendario y las cuotas coincidentes se acumulan por mes y tarjeta sin alterar cuotas anteriores.
+- Cada compra registra tarjeta, fecha, monto, número de cuotas, primera cuota y distribución total personalizada por persona. `Yo` es opcional: solo se incluye cuando una parte de la compra le corresponde al propietario.
+- Los aportes se aplican primero a las cuotas más antiguas. Pueden recibirse en una cuenta bancaria propia, quedando pendientes de abonar, o pagarse directamente a la tarjeta; el pago directo registra simultáneamente el aporte y su abono a la TC.
+- Registra, edita y elimina tarjetas y cuentas bancarias. Las cuentas conservan nombre, banco y tipo; no intentan representar el saldo bancario real. Compras, casos, responsables, aportes y abonos también ofrecen edición o eliminación con confirmaciones y recálculo derivado.
 - La vista para captura muestra el resumen grupal de un caso, oculta la información financiera privada y permite destacar opcionalmente a una persona sin ocultar a las demás.
-- El detalle del caso permite eliminar compras, aportes y destinos con confirmación. Eliminar un aporte elimina también sus destinos vinculados; los saldos se recalculan después de cada eliminación.
-- Las tarjetas pueden editarse desde la configuración. Cada caso permite editar su nombre y notas; cada compra permite editar descripción, monto, fecha, tarjeta y oportunidades. Cambiar el monto recalcula los aportes y saldos sin borrar pagos existentes. En la captura, el detalle identifica primero la tarjeta acreedora y conserva debajo el motivo y la fecha de la compra.
-- Los nombres de los participantes pueden editarse dentro del caso. Un hermano puede quitarse con confirmación; se eliminan sus pagos y destinos asociados y los aportes se redistribuyen entre los participantes restantes. `Yo` no puede eliminarse, pero sí registra su aporte como cualquier participante.
+- El calendario muestra cada cuota, los montos por responsable, lo recibido y lo abonado a la tarjeta. Los resúmenes mensuales muestran la cuota combinada cuando coinciden varias compras.
+- La vista para captura conserva únicamente la información compartible de responsables y saldos; oculta cuentas y movimientos privados.
 
 ## Shells y componentes compartidos
 
@@ -101,7 +100,7 @@ Archivos existentes, no ejecutados durante esta revisión:
 - `supabase/spotify_family.sql`: crea `spotify_family_members` y `spotify_family_payments`.
 - `supabase/pretty_salon.sql`: crea las cinco tablas `pretty_salon_*` indicadas arriba y la función de pertenencia al equipo.
 - `supabase/personal_loans.sql`: crea `personal_loans`.
-- `supabase/recordatorios_compras.sql`: crea las ocho tablas `reminder_*` para tarjetas, cuentas, casos, participantes, compras, participaciones, pagos y destinos del dinero.
+- `supabase/recordatorios_compras.sql`: crea y migra las ocho tablas `reminder_*` para tarjetas, cuentas bancarias, casos, responsables, compras con cuotas, distribuciones, aportes y abonos del dinero.
 
 Los cinco archivos habilitan RLS y definen políticas para usuarios autenticados. Dinero Tanque, Spotify Familiar, Recordatorios y Préstamos aplican aislamiento por `owner_id`. Pretty Salon combina propiedad con membresía compartida por correo para lectura, actualización y eliminación; su tabla de miembros solo permite a cada usuario leer su propia fila. Cronograma también escribe `owner_id` desde el código, pero su esquema y sus políticas no están documentados por un SQL del repositorio.
 
@@ -113,7 +112,7 @@ Los cinco archivos habilitan RLS y definen políticas para usuarios autenticados
 - Compatibilidad prioritaria con Supabase Free y Vercel Hobby/Free.
 - Cronograma administra una única lista vigente de materias: no conserva ciclos; sus eliminaciones y limpieza también descartan las actividades relacionadas.
 - Pretty Salon conserva una identidad visual y navegación interna propias.
-- Recordatorios conserva el historial de cosas devueltas separado y permite reclasificar `No lo sé`; las compras compartidas se consolidan por caso, pero cada transacción mantiene su tarjeta y fechas.
+- Recordatorios conserva el historial de cosas devueltas separado y permite reclasificar `No lo sé`; las compras a tasa cero se consolidan por caso, pero cada compra mantiene tarjeta, distribución y calendario independientes.
 
 ## Pendientes operativos conocidos
 

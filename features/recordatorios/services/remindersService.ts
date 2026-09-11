@@ -6,6 +6,7 @@ import type {
   NewCaseInput,
   NewPaymentInput,
   NewPurchaseInput,
+  UpdatePaymentInput,
   PurchaseShare,
   SavingsAccount,
   SharedCase,
@@ -50,6 +51,8 @@ export async function loadReminderData(
   const accounts: SavingsAccount[] = ((accountsResult.data ?? []) as Row[]).map((row) => ({
     id: String(row.id),
     name: String(row.name),
+    bank: String(row.bank ?? ""),
+    accountType: (row.account_type ?? "savings") as SavingsAccount["accountType"],
     active: Boolean(row.active),
   }));
   const participants: Array<SharedParticipant & { caseId: string }> = ((participantsResult.data ?? []) as Row[]).map((row) => ({
@@ -73,6 +76,8 @@ export async function loadReminderData(
     firstOpportunity: String(row.first_opportunity),
     secondOpportunity: String(row.second_opportunity),
     cardId: row.card_id ? String(row.card_id) : null,
+    installmentCount: Math.max(1, asNumber(row.installment_count) || 1),
+    firstInstallmentDate: String(row.first_installment_date ?? row.first_opportunity),
     shares: shares.filter((share) => share.purchaseId === String(row.id)),
   }));
   const payments: Array<SharedPayment & { caseId: string }> = ((paymentsResult.data ?? []) as Row[]).map((row) => ({
@@ -82,6 +87,9 @@ export async function loadReminderData(
     amount: asNumber(row.amount),
     paidAt: String(row.paid_at),
     method: String(row.method ?? "Transferencia"),
+    route: (row.route ?? "account") as SharedPayment["route"],
+    accountId: row.account_id ? String(row.account_id) : null,
+    cardId: row.card_id ? String(row.card_id) : null,
     notes: String(row.notes ?? ""),
   }));
   const allocations: Array<FundAllocation & { caseId: string }> = ((allocationsResult.data ?? []) as Row[]).map((row) => ({
@@ -120,8 +128,20 @@ export async function createCard(supabase: SupabaseClient, ownerId: string, inpu
   });
 }
 
-export async function createAccount(supabase: SupabaseClient, ownerId: string, name: string) {
-  return supabase.from("reminder_savings_accounts").insert({ owner_id: ownerId, name: name.trim() });
+export async function createAccount(supabase: SupabaseClient, ownerId: string, input: Omit<SavingsAccount, "id" | "active">) {
+  return supabase.from("reminder_savings_accounts").insert({ owner_id: ownerId, name: input.name.trim(), bank: input.bank.trim(), account_type: input.accountType });
+}
+
+export async function updateAccount(supabase: SupabaseClient, ownerId: string, accountId: string, input: Omit<SavingsAccount, "id" | "active">) {
+  return supabase.from("reminder_savings_accounts").update({ name: input.name.trim(), bank: input.bank.trim(), account_type: input.accountType }).eq("id", accountId).eq("owner_id", ownerId);
+}
+
+export async function deleteAccount(supabase: SupabaseClient, ownerId: string, accountId: string) {
+  return supabase.from("reminder_savings_accounts").delete().eq("id", accountId).eq("owner_id", ownerId);
+}
+
+export async function deleteCard(supabase: SupabaseClient, ownerId: string, cardId: string) {
+  return supabase.from("reminder_credit_cards").delete().eq("id", cardId).eq("owner_id", ownerId);
 }
 
 export async function updateCard(
@@ -160,13 +180,17 @@ async function insertPurchase(
       amount: input.amount,
       first_opportunity: input.firstOpportunity,
       second_opportunity: input.secondOpportunity,
+      installment_count: input.installmentCount,
+      first_installment_date: input.firstInstallmentDate,
     })
     .select("id")
     .single();
   if (purchaseResult.error) return purchaseResult;
 
   const shareResult = await supabase.from("reminder_purchase_shares").insert(
-    splitAmount(input.amount, participants).map((share) => ({
+    (input.participantAmounts
+      ? participants.map((participant) => ({ participantId: participant.id, amount: input.participantAmounts?.[participant.id] ?? 0 }))
+      : splitAmount(input.amount, participants)).map((share) => ({
       owner_id: ownerId,
       purchase_id: purchaseResult.data.id,
       participant_id: share.participantId,
@@ -207,7 +231,8 @@ export async function createSharedCase(supabase: SupabaseClient, ownerId: string
     name: row.name,
     isOwner: row.is_owner,
   }));
-  return insertPurchase(supabase, ownerId, caseResult.data.id, participants, input.purchase);
+  const participantAmounts = Object.fromEntries(participants.map((participant, index) => [participant.id, input.participantAmounts[index] ?? 0]));
+  return insertPurchase(supabase, ownerId, caseResult.data.id, participants, { ...input.purchase, participantAmounts });
 }
 
 export function addPurchase(supabase: SupabaseClient, ownerId: string, sharedCase: SharedCase, input: NewPurchaseInput) {
@@ -215,15 +240,44 @@ export function addPurchase(supabase: SupabaseClient, ownerId: string, sharedCas
 }
 
 export async function createPayment(supabase: SupabaseClient, ownerId: string, input: NewPaymentInput) {
-  return supabase.from("reminder_shared_payments").insert({
+  const paymentResult = await supabase.from("reminder_shared_payments").insert({
     owner_id: ownerId,
     case_id: input.caseId,
     participant_id: input.participantId,
     amount: input.amount,
     paid_at: input.paidAt,
     method: input.method.trim(),
+    route: input.route,
+    account_id: input.route === "account" ? input.accountId : null,
+    card_id: input.route === "direct_card" ? input.cardId : null,
     notes: input.notes.trim(),
+  }).select("id").single();
+  if (paymentResult.error || input.route !== "direct_card") return paymentResult;
+  const allocationResult = await supabase.from("reminder_fund_allocations").insert({
+    owner_id: ownerId, case_id: input.caseId, payment_id: paymentResult.data.id,
+    amount: input.amount, allocated_at: input.paidAt, destination_type: "card",
+    card_id: input.cardId, account_id: null, notes: "Pago directo a la tarjeta",
   });
+  if (allocationResult.error) await supabase.from("reminder_shared_payments").delete().eq("id", paymentResult.data.id).eq("owner_id", ownerId);
+  return allocationResult;
+}
+
+export async function updatePayment(supabase: SupabaseClient, ownerId: string, paymentId: string, input: UpdatePaymentInput) {
+  const existing = await supabase.from("reminder_shared_payments").select("route").eq("id", paymentId).eq("owner_id", ownerId).single();
+  if (existing.error) return existing;
+  const result = await supabase.from("reminder_shared_payments").update({
+    participant_id: input.participantId, amount: input.amount, paid_at: input.paidAt,
+    method: input.method.trim(), route: input.route,
+    account_id: input.route === "account" ? input.accountId : null,
+    card_id: input.route === "direct_card" ? input.cardId : null, notes: input.notes.trim(),
+  }).eq("id", paymentId).eq("owner_id", ownerId);
+  if (result.error) return result;
+  let allocationDelete = supabase.from("reminder_fund_allocations").delete().eq("payment_id", paymentId).eq("owner_id", ownerId);
+  if (existing.data.route === input.route) allocationDelete = allocationDelete.eq("notes", "Pago directo a la tarjeta");
+  const deleteResult = await allocationDelete;
+  if (deleteResult.error) return deleteResult;
+  if (input.route !== "direct_card") return result;
+  return supabase.from("reminder_fund_allocations").insert({ owner_id: ownerId, case_id: input.caseId, payment_id: paymentId, amount: input.amount, allocated_at: input.paidAt, destination_type: "card", card_id: input.cardId, account_id: null, notes: "Pago directo a la tarjeta" });
 }
 
 export async function createAllocation(supabase: SupabaseClient, ownerId: string, input: NewAllocationInput) {
@@ -238,6 +292,14 @@ export async function createAllocation(supabase: SupabaseClient, ownerId: string
     account_id: input.destinationType === "savings" ? input.accountId : null,
     notes: input.notes.trim(),
   });
+}
+
+export async function updateAllocation(supabase: SupabaseClient, ownerId: string, allocationId: string, input: NewAllocationInput) {
+  return supabase.from("reminder_fund_allocations").update({ amount: input.amount, allocated_at: input.allocatedAt, destination_type: "card", card_id: input.cardId, account_id: null, notes: input.notes.trim() }).eq("id", allocationId).eq("owner_id", ownerId);
+}
+
+export async function deleteSharedCase(supabase: SupabaseClient, ownerId: string, caseId: string) {
+  return supabase.from("reminder_shared_cases").delete().eq("id", caseId).eq("owner_id", ownerId);
 }
 
 export async function deletePayment(
@@ -306,19 +368,18 @@ export async function updatePurchase(
       card_id: input.cardId,
       first_opportunity: input.firstOpportunity,
       second_opportunity: input.secondOpportunity,
+      installment_count: input.installmentCount,
+      first_installment_date: input.firstInstallmentDate,
     })
     .eq("id", purchaseId)
     .eq("owner_id", ownerId);
   if (purchaseResult.error) return purchaseResult;
 
-  const equalShare =
-    Math.ceil(Math.round(input.amount * 100) / sharedCase.participants.length) /
-    100;
-  return supabase
-    .from("reminder_purchase_shares")
-    .update({ amount: equalShare })
-    .eq("purchase_id", purchaseId)
-    .eq("owner_id", ownerId);
+  const shares = input.participantAmounts
+    ? sharedCase.participants.map((participant) => ({ participantId: participant.id, amount: input.participantAmounts?.[participant.id] ?? 0 }))
+    : splitAmount(input.amount, sharedCase.participants);
+  const results = await Promise.all(shares.map((share) => supabase.from("reminder_purchase_shares").update({ amount: share.amount }).eq("purchase_id", purchaseId).eq("participant_id", share.participantId).eq("owner_id", ownerId)));
+  return results.find((item) => item.error) ?? results[0];
 }
 
 export async function updateParticipantName(
@@ -343,8 +404,7 @@ export async function deleteParticipant(
     .from("reminder_case_participants")
     .delete()
     .eq("id", participantId)
-    .eq("owner_id", ownerId)
-    .eq("is_owner", false);
+    .eq("owner_id", ownerId);
 }
 
 export async function closeCase(supabase: SupabaseClient, ownerId: string, caseId: string, closed: boolean) {

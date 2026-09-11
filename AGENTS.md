@@ -3,7 +3,7 @@
 ## Inicio de cada tarea
 
 - Leer completamente este `AGENTS.md`.
-- Leer `context/PROJECT_CONTEXT.md`.
+- Leer `context/contexto.md`.
 - Usar el contexto como índice inicial para ahorrar análisis innecesario.
 - Inspeccionar después únicamente los archivos relacionados con la tarea.
 - Ampliar la inspección solamente cuando existan dependencias o riesgos que lo justifiquen.
@@ -46,7 +46,7 @@
 
 ## Actualización del contexto
 
-Actualizar `context/PROJECT_CONTEXT.md` solamente cuando cambien aspectos relevantes:
+Actualizar `context/contexto.md` solamente cuando cambien aspectos relevantes:
 
 - módulos o rutas;
 - arquitectura o estructura importante;
@@ -59,7 +59,7 @@ Actualizar `context/PROJECT_CONTEXT.md` solamente cuando cambien aspectos releva
 
 No actualizarlo por correcciones de texto, ajustes visuales menores, cambios de formato, limpieza de imports o refactors internos sin impacto arquitectónico o funcional.
 
-Mantener `context/PROJECT_CONTEXT.md` como una fotografía actual y compacta, no como un historial de cambios. Al actualizarlo:
+Mantener `context/contexto.md` como una fotografía actual y compacta, no como un historial de cambios. Al actualizarlo:
 
 - modificar la sección correspondiente y eliminar información obsoleta;
 - evitar entradas cronológicas e información duplicada;

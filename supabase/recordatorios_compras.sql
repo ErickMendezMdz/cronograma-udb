@@ -16,6 +16,8 @@ create table if not exists public.reminder_savings_accounts (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  bank text not null default '',
+  account_type text not null default 'savings' check (account_type in ('savings', 'checking', 'wallet', 'other')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -49,6 +51,8 @@ create table if not exists public.reminder_shared_purchases (
   amount numeric(12,2) not null check (amount > 0),
   first_opportunity date not null,
   second_opportunity date not null,
+  installment_count integer not null default 1 check (installment_count > 0),
+  first_installment_date date not null,
   created_at timestamptz not null default now(),
   check (second_opportunity > first_opportunity)
 );
@@ -71,9 +75,30 @@ create table if not exists public.reminder_shared_payments (
   amount numeric(12,2) not null check (amount > 0),
   paid_at date not null,
   method text not null default 'Transferencia',
+  route text not null default 'account' check (route in ('account', 'direct_card')),
+  account_id uuid null references public.reminder_savings_accounts(id) on delete set null,
+  card_id uuid null references public.reminder_credit_cards(id) on delete set null,
   notes text not null default '',
   created_at timestamptz not null default now()
 );
+
+-- Migración idempotente para instalaciones creadas con una versión anterior.
+alter table public.reminder_savings_accounts add column if not exists bank text not null default '';
+alter table public.reminder_savings_accounts add column if not exists account_type text not null default 'savings';
+alter table public.reminder_shared_purchases add column if not exists installment_count integer not null default 1;
+alter table public.reminder_shared_purchases add column if not exists first_installment_date date;
+update public.reminder_shared_purchases set first_installment_date = first_opportunity where first_installment_date is null;
+alter table public.reminder_shared_purchases alter column first_installment_date set not null;
+alter table public.reminder_shared_payments add column if not exists route text not null default 'account';
+alter table public.reminder_shared_payments add column if not exists account_id uuid null references public.reminder_savings_accounts(id) on delete set null;
+alter table public.reminder_shared_payments add column if not exists card_id uuid null references public.reminder_credit_cards(id) on delete set null;
+
+alter table public.reminder_savings_accounts drop constraint if exists reminder_savings_accounts_account_type_check;
+alter table public.reminder_savings_accounts add constraint reminder_savings_accounts_account_type_check check (account_type in ('savings', 'checking', 'wallet', 'other'));
+alter table public.reminder_shared_purchases drop constraint if exists reminder_shared_purchases_installment_count_check;
+alter table public.reminder_shared_purchases add constraint reminder_shared_purchases_installment_count_check check (installment_count > 0);
+alter table public.reminder_shared_payments drop constraint if exists reminder_shared_payments_route_check;
+alter table public.reminder_shared_payments add constraint reminder_shared_payments_route_check check (route in ('account', 'direct_card'));
 
 create table if not exists public.reminder_fund_allocations (
   id uuid primary key default gen_random_uuid(),

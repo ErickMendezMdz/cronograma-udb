@@ -11,13 +11,19 @@ import {
   createAllocation as createAllocationRecord,
   createCard as createCardRecord,
   createPayment as createPaymentRecord,
+  deleteSharedCase as deleteSharedCaseRecord,
   createSharedCase,
+  deleteAccount as deleteAccountRecord,
+  deleteCard as deleteCardRecord,
   deleteAllocation as deleteAllocationRecord,
   deleteParticipant as deleteParticipantRecord,
   deletePayment as deletePaymentRecord,
   deletePurchase as deletePurchaseRecord,
   loadReminderData,
   updateCard as updateCardRecord,
+  updateAccount as updateAccountRecord,
+  updatePayment as updatePaymentRecord,
+  updateAllocation as updateAllocationRecord,
   updateParticipantName as updateParticipantNameRecord,
   updatePurchase as updatePurchaseRecord,
   updateSharedCase as updateSharedCaseRecord,
@@ -28,6 +34,7 @@ import type {
   NewCaseInput,
   NewPaymentInput,
   NewPurchaseInput,
+  UpdatePaymentInput,
   SavingsAccount,
   SharedCase,
 } from "@/features/recordatorios/types";
@@ -102,9 +109,24 @@ export function useSharedPurchases() {
     return run(() => createCardRecord(supabase, userId, input));
   }, [run, supabase, userId]);
 
-  const createAccount = useCallback(async (name: string) => {
+  const createAccount = useCallback(async (input: Omit<SavingsAccount, "id" | "active">) => {
     if (!supabase || !userId) return false;
-    return run(() => createAccountRecord(supabase, userId, name));
+    return run(() => createAccountRecord(supabase, userId, input));
+  }, [run, supabase, userId]);
+
+  const updateAccount = useCallback(async (accountId: string, input: Omit<SavingsAccount, "id" | "active">) => {
+    if (!supabase || !userId) return false;
+    return run(() => updateAccountRecord(supabase, userId, accountId, input));
+  }, [run, supabase, userId]);
+
+  const deleteAccount = useCallback(async (accountId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deleteAccountRecord(supabase, userId, accountId));
+  }, [run, supabase, userId]);
+
+  const deleteCard = useCallback(async (cardId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deleteCardRecord(supabase, userId, cardId));
   }, [run, supabase, userId]);
 
   const updateCard = useCallback(async (
@@ -130,9 +152,24 @@ export function useSharedPurchases() {
     return run(() => createPaymentRecord(supabase, userId, input));
   }, [run, supabase, userId]);
 
+  const updatePayment = useCallback(async (paymentId: string, input: UpdatePaymentInput) => {
+    if (!supabase || !userId) return false;
+    return run(() => updatePaymentRecord(supabase, userId, paymentId, input));
+  }, [run, supabase, userId]);
+
   const createAllocation = useCallback(async (input: NewAllocationInput) => {
     if (!supabase || !userId) return false;
     return run(() => createAllocationRecord(supabase, userId, input));
+  }, [run, supabase, userId]);
+
+  const updateAllocation = useCallback(async (allocationId: string, input: NewAllocationInput) => {
+    if (!supabase || !userId) return false;
+    return run(() => updateAllocationRecord(supabase, userId, allocationId, input));
+  }, [run, supabase, userId]);
+
+  const deleteCase = useCallback(async (caseId: string) => {
+    if (!supabase || !userId) return false;
+    return run(() => deleteSharedCaseRecord(supabase, userId, caseId));
   }, [run, supabase, userId]);
 
   const deletePayment = useCallback(async (paymentId: string) => {
@@ -211,8 +248,9 @@ export function useSharedPurchases() {
 
   return {
     checking, loading, saving, supabase, configError, email, cards, accounts,
-    cases, error, setError, createCard, createAccount, updateCard, createCase, addPurchase,
-    createPayment, createAllocation, deletePayment, deleteAllocation,
+    cases, error, setError, createCard, createAccount, updateCard, updateAccount,
+    deleteCard, deleteAccount, createCase, addPurchase,
+    createPayment, updatePayment, createAllocation, updateAllocation, deletePayment, deleteAllocation, deleteCase,
     deletePurchase, updateCase, updatePurchase, updateParticipantName,
     deleteParticipant, toggleClosed, logout,
   };

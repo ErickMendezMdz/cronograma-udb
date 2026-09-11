@@ -12,6 +12,8 @@ export type CreditCard = {
 export type SavingsAccount = {
   id: string;
   name: string;
+  bank: string;
+  accountType: "savings" | "checking" | "wallet" | "other";
   active: boolean;
 };
 
@@ -35,6 +37,8 @@ export type SharedPurchase = {
   firstOpportunity: string;
   secondOpportunity: string;
   cardId: string | null;
+  installmentCount: number;
+  firstInstallmentDate: string;
   shares: PurchaseShare[];
 };
 
@@ -44,6 +48,9 @@ export type SharedPayment = {
   amount: number;
   paidAt: string;
   method: string;
+  route: "account" | "direct_card";
+  accountId: string | null;
+  cardId: string | null;
   notes: string;
 };
 
@@ -83,6 +90,7 @@ export type NewCaseInput = {
   title: string;
   notes: string;
   participantNames: string[];
+  participantAmounts: number[];
   purchase: NewPurchaseInput;
 };
 
@@ -93,6 +101,9 @@ export type NewPurchaseInput = {
   cardId: string | null;
   firstOpportunity: string;
   secondOpportunity: string;
+  installmentCount: number;
+  firstInstallmentDate: string;
+  participantAmounts?: Record<string, number>;
 };
 
 export type NewPaymentInput = {
@@ -101,7 +112,22 @@ export type NewPaymentInput = {
   amount: number;
   paidAt: string;
   method: string;
+  route: "account" | "direct_card";
+  accountId: string | null;
+  cardId: string | null;
   notes: string;
+};
+
+export type UpdatePaymentInput = NewPaymentInput;
+
+export type InstallmentRow = {
+  purchaseId: string;
+  purchaseDescription: string;
+  cardId: string | null;
+  number: number;
+  total: number;
+  dueDate: string;
+  participantAmounts: Record<string, number>;
 };
 
 export type NewAllocationInput = {
