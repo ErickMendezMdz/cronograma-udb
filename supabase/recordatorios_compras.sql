@@ -26,6 +26,7 @@ create table if not exists public.reminder_shared_cases (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   title text not null,
+  case_type text not null default 'shared' check (case_type in ('shared', 'installment')),
   notes text not null default '',
   status text not null default 'active' check (status in ('active', 'closed')),
   created_at timestamptz not null default now()
@@ -83,6 +84,7 @@ create table if not exists public.reminder_shared_payments (
 );
 
 -- Migración idempotente para instalaciones creadas con una versión anterior.
+alter table public.reminder_shared_cases add column if not exists case_type text not null default 'shared';
 alter table public.reminder_savings_accounts add column if not exists bank text not null default '';
 alter table public.reminder_savings_accounts add column if not exists account_type text not null default 'savings';
 alter table public.reminder_shared_purchases add column if not exists installment_count integer not null default 1;
@@ -99,6 +101,8 @@ alter table public.reminder_shared_purchases drop constraint if exists reminder_
 alter table public.reminder_shared_purchases add constraint reminder_shared_purchases_installment_count_check check (installment_count > 0);
 alter table public.reminder_shared_payments drop constraint if exists reminder_shared_payments_route_check;
 alter table public.reminder_shared_payments add constraint reminder_shared_payments_route_check check (route in ('account', 'direct_card'));
+alter table public.reminder_shared_cases drop constraint if exists reminder_shared_cases_case_type_check;
+alter table public.reminder_shared_cases add constraint reminder_shared_cases_case_type_check check (case_type in ('shared', 'installment'));
 
 create table if not exists public.reminder_fund_allocations (
   id uuid primary key default gen_random_uuid(),

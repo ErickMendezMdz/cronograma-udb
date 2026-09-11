@@ -63,12 +63,11 @@ export function estimatedCardDates(purchaseDate: string, card?: CreditCard) {
 
 export function splitAmount(amount: number, participants: SharedParticipant[]) {
   const totalCents = Math.round(amount * 100);
-  const base = Math.floor(totalCents / participants.length);
-  const remainder = totalCents - base * participants.length;
+  const equalShareCents = Math.ceil(totalCents / participants.length);
 
-  return participants.map((participant, index) => ({
+  return participants.map((participant) => ({
     participantId: participant.id,
-    amount: (base + (index < remainder ? 1 : 0)) / 100,
+    amount: equalShareCents / 100,
   }));
 }
 
@@ -111,13 +110,28 @@ export function getParticipantBalances(sharedCase: SharedCase): ParticipantBalan
   return [...sharedCase.participants]
     .sort((a, b) => Number(a.isOwner) - Number(b.isOwner))
     .map((participant) => {
-    const assigned = sharedCase.purchases.reduce((sum, purchase) =>
-      sum + (purchase.shares.find((share) => share.participantId === participant.id)?.amount ?? 0), 0);
+    const assigned = sharedCase.purchases.reduce((sum, purchase) => sum + (
+      sharedCase.caseType === "shared"
+        ? Math.ceil(Math.round(purchase.amount * 100) / sharedCase.participants.length) / 100
+        : purchase.shares.find((share) => share.participantId === participant.id)?.amount ?? 0
+    ), 0);
     const paid = sharedCase.payments
       .filter((payment) => payment.participantId === participant.id)
       .reduce((sum, payment) => sum + payment.amount, 0);
     const pending = Math.max(0, assigned - paid);
     let paymentRemaining = paid;
+    if (sharedCase.caseType === "shared") {
+      const pendingPurchases = [...sharedCase.purchases].sort((a, b) => a.purchaseDate.localeCompare(b.purchaseDate)).filter((purchase) => {
+        const share = Math.ceil(Math.round(purchase.amount * 100) / sharedCase.participants.length) / 100;
+        const applied = Math.min(paymentRemaining, share);
+        paymentRemaining -= applied;
+        return share - applied > 0.005;
+      });
+      const opportunities = pendingPurchases.flatMap((purchase) => [purchase.firstOpportunity, purchase.secondOpportunity]).filter(Boolean).sort();
+      const future = [...new Set(opportunities.filter((date) => date >= today))];
+      const overdue = pendingPurchases.some((purchase) => purchase.secondOpportunity < today);
+      return { ...participant, assigned, paid, pending, status: pending <= 0.005 ? "paid" : overdue ? "overdue" : paid > 0 ? "partial" : "pending", firstOpportunity: future[0] ?? pendingPurchases[0]?.secondOpportunity ?? null, secondOpportunity: future[1] ?? null };
+    }
     const pendingInstallments = getInstallments(sharedCase)
       .filter((installment) => {
         const share = installment.participantAmounts[participant.id] ?? 0;

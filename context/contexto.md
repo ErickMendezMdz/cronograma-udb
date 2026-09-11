@@ -68,13 +68,13 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - La búsqueda cubre objeto, persona y notas. Los activos admiten filtro por categoría, edición, marcado como devuelto y eliminación; el historial permite restaurar o eliminar.
 - No existe fecha esperada de devolución ni estado vencido: solo `active` y `returned`, con fecha real de devolución.
 - El formulario inicia oculto y se abre con `+ Registrar préstamo`. La fecha inicial del préstamo se construye con año, mes y día locales del navegador, no mediante una conversión UTC.
-- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`. Organiza cada causa como un caso con responsables editables y varias compras a tasa cero; cada compra conserva su propio calendario y las cuotas coincidentes se acumulan por mes y tarjeta sin alterar cuotas anteriores.
-- Cada compra registra tarjeta, fecha, monto, número de cuotas, primera cuota y distribución total personalizada por persona. `Yo` es opcional: solo se incluye cuando una parte de la compra le corresponde al propietario.
-- Los aportes se aplican primero a las cuotas más antiguas. Pueden recibirse en una cuenta bancaria propia, quedando pendientes de abonar, o pagarse directamente a la tarjeta; el pago directo registra simultáneamente el aporte y su abono a la TC.
+- Compras con tarjeta usa `SharedPurchasesDashboard`, `useSharedPurchases` y `remindersService.ts`, pero ofrece dos tipos de caso separados: `Compra compartida` y `Compra a tasa cero`. Los registros creados antes de esta separación conservan automáticamente el tipo compartido.
+- Compra compartida conserva el flujo original para causas como medicinas familiares: incluye a `Yo`, divide cada compra por igual, mantiene dos oportunidades para entregar el aporte completo y permite sumar compras sin perder pagos anteriores. Usa `SharedCaseForm` y `SharedCaseDetail`.
+- Compra a tasa cero usa `InstallmentCaseForm` y `InstallmentCaseDetail`. Cada compra registra tarjeta, fecha, monto, número de cuotas, primera cuota y distribución total personalizada; `Yo` es opcional. Cada compra conserva su calendario y las cuotas coincidentes se acumulan por mes y tarjeta sin alterar cuotas anteriores.
+- En tasa cero los aportes se aplican primero a las cuotas más antiguas. Pueden recibirse en una cuenta bancaria propia, quedando pendientes de abonar, o pagarse directamente a la tarjeta; el pago directo registra simultáneamente el aporte y su abono a la TC.
 - Registra, edita y elimina tarjetas y cuentas bancarias. Las cuentas conservan nombre, banco y tipo; no intentan representar el saldo bancario real. Compras, casos, responsables, aportes y abonos también ofrecen edición o eliminación con confirmaciones y recálculo derivado.
-- La vista para captura muestra el resumen grupal de un caso, oculta la información financiera privada y permite destacar opcionalmente a una persona sin ocultar a las demás.
-- El calendario muestra cada cuota, los montos por responsable, lo recibido y lo abonado a la tarjeta. Los resúmenes mensuales muestran la cuota combinada cuando coinciden varias compras.
-- La vista para captura conserva únicamente la información compartible de responsables y saldos; oculta cuentas y movimientos privados.
+- La vista para captura del flujo compartido mantiene su resumen grupal y destaque opcional; la de tasa cero conserva únicamente responsables y saldos. Ambas ocultan cuentas y movimientos privados.
+- El calendario de tasa cero muestra cada cuota, montos por responsable, lo recibido y lo abonado a la tarjeta. Los resúmenes mensuales muestran la cuota combinada cuando coinciden varias compras.
 
 ## Shells y componentes compartidos
 
@@ -112,7 +112,7 @@ Los cinco archivos habilitan RLS y definen políticas para usuarios autenticados
 - Compatibilidad prioritaria con Supabase Free y Vercel Hobby/Free.
 - Cronograma administra una única lista vigente de materias: no conserva ciclos; sus eliminaciones y limpieza también descartan las actividades relacionadas.
 - Pretty Salon conserva una identidad visual y navegación interna propias.
-- Recordatorios conserva el historial de cosas devueltas separado y permite reclasificar `No lo sé`; las compras a tasa cero se consolidan por caso, pero cada compra mantiene tarjeta, distribución y calendario independientes.
+- Recordatorios conserva el historial de cosas devueltas separado y permite reclasificar `No lo sé`; las compras compartidas normales conservan su flujo previo y tasa cero funciona como una opción adicional con distribución y calendario propios.
 
 ## Pendientes operativos conocidos
 

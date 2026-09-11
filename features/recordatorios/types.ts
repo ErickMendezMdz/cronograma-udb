@@ -67,6 +67,7 @@ export type FundAllocation = {
 
 export type SharedCase = {
   id: string;
+  caseType: "shared" | "installment";
   title: string;
   notes: string;
   status: "active" | "closed";
@@ -87,10 +88,11 @@ export type ParticipantBalance = SharedParticipant & {
 };
 
 export type NewCaseInput = {
+  caseType?: "shared" | "installment";
   title: string;
   notes: string;
   participantNames: string[];
-  participantAmounts: number[];
+  participantAmounts?: number[];
   purchase: NewPurchaseInput;
 };
 
@@ -101,8 +103,8 @@ export type NewPurchaseInput = {
   cardId: string | null;
   firstOpportunity: string;
   secondOpportunity: string;
-  installmentCount: number;
-  firstInstallmentDate: string;
+  installmentCount?: number;
+  firstInstallmentDate?: string;
   participantAmounts?: Record<string, number>;
 };
 
@@ -112,9 +114,9 @@ export type NewPaymentInput = {
   amount: number;
   paidAt: string;
   method: string;
-  route: "account" | "direct_card";
-  accountId: string | null;
-  cardId: string | null;
+  route?: "account" | "direct_card";
+  accountId?: string | null;
+  cardId?: string | null;
   notes: string;
 };
 

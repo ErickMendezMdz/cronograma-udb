@@ -105,6 +105,7 @@ export async function loadReminderData(
   }));
   const cases: SharedCase[] = ((casesResult.data ?? []) as Row[]).map((row) => ({
     id: String(row.id),
+    caseType: (row.case_type ?? "shared") as SharedCase["caseType"],
     title: String(row.title),
     notes: String(row.notes ?? ""),
     status: row.status as SharedCase["status"],
@@ -180,8 +181,8 @@ async function insertPurchase(
       amount: input.amount,
       first_opportunity: input.firstOpportunity,
       second_opportunity: input.secondOpportunity,
-      installment_count: input.installmentCount,
-      first_installment_date: input.firstInstallmentDate,
+      installment_count: input.installmentCount ?? 1,
+      first_installment_date: input.firstInstallmentDate ?? input.firstOpportunity,
     })
     .select("id")
     .single();
@@ -206,7 +207,7 @@ async function insertPurchase(
 export async function createSharedCase(supabase: SupabaseClient, ownerId: string, input: NewCaseInput) {
   const caseResult = await supabase
     .from("reminder_shared_cases")
-    .insert({ owner_id: ownerId, title: input.title.trim(), notes: input.notes.trim() })
+    .insert({ owner_id: ownerId, case_type: input.caseType ?? "shared", title: input.title.trim(), notes: input.notes.trim() })
     .select("id")
     .single();
   if (caseResult.error) return caseResult;
@@ -231,7 +232,9 @@ export async function createSharedCase(supabase: SupabaseClient, ownerId: string
     name: row.name,
     isOwner: row.is_owner,
   }));
-  const participantAmounts = Object.fromEntries(participants.map((participant, index) => [participant.id, input.participantAmounts[index] ?? 0]));
+  const participantAmounts = input.participantAmounts
+    ? Object.fromEntries(participants.map((participant, index) => [participant.id, input.participantAmounts?.[index] ?? 0]))
+    : undefined;
   return insertPurchase(supabase, ownerId, caseResult.data.id, participants, { ...input.purchase, participantAmounts });
 }
 
@@ -240,6 +243,7 @@ export function addPurchase(supabase: SupabaseClient, ownerId: string, sharedCas
 }
 
 export async function createPayment(supabase: SupabaseClient, ownerId: string, input: NewPaymentInput) {
+  const route = input.route ?? "account";
   const paymentResult = await supabase.from("reminder_shared_payments").insert({
     owner_id: ownerId,
     case_id: input.caseId,
@@ -247,12 +251,12 @@ export async function createPayment(supabase: SupabaseClient, ownerId: string, i
     amount: input.amount,
     paid_at: input.paidAt,
     method: input.method.trim(),
-    route: input.route,
-    account_id: input.route === "account" ? input.accountId : null,
-    card_id: input.route === "direct_card" ? input.cardId : null,
+    route,
+    account_id: route === "account" ? input.accountId ?? null : null,
+    card_id: route === "direct_card" ? input.cardId ?? null : null,
     notes: input.notes.trim(),
   }).select("id").single();
-  if (paymentResult.error || input.route !== "direct_card") return paymentResult;
+  if (paymentResult.error || route !== "direct_card") return paymentResult;
   const allocationResult = await supabase.from("reminder_fund_allocations").insert({
     owner_id: ownerId, case_id: input.caseId, payment_id: paymentResult.data.id,
     amount: input.amount, allocated_at: input.paidAt, destination_type: "card",
@@ -263,20 +267,21 @@ export async function createPayment(supabase: SupabaseClient, ownerId: string, i
 }
 
 export async function updatePayment(supabase: SupabaseClient, ownerId: string, paymentId: string, input: UpdatePaymentInput) {
+  const route = input.route ?? "account";
   const existing = await supabase.from("reminder_shared_payments").select("route").eq("id", paymentId).eq("owner_id", ownerId).single();
   if (existing.error) return existing;
   const result = await supabase.from("reminder_shared_payments").update({
     participant_id: input.participantId, amount: input.amount, paid_at: input.paidAt,
-    method: input.method.trim(), route: input.route,
-    account_id: input.route === "account" ? input.accountId : null,
-    card_id: input.route === "direct_card" ? input.cardId : null, notes: input.notes.trim(),
+    method: input.method.trim(), route,
+    account_id: route === "account" ? input.accountId ?? null : null,
+    card_id: route === "direct_card" ? input.cardId ?? null : null, notes: input.notes.trim(),
   }).eq("id", paymentId).eq("owner_id", ownerId);
   if (result.error) return result;
   let allocationDelete = supabase.from("reminder_fund_allocations").delete().eq("payment_id", paymentId).eq("owner_id", ownerId);
-  if (existing.data.route === input.route) allocationDelete = allocationDelete.eq("notes", "Pago directo a la tarjeta");
+  if (existing.data.route === route) allocationDelete = allocationDelete.eq("notes", "Pago directo a la tarjeta");
   const deleteResult = await allocationDelete;
   if (deleteResult.error) return deleteResult;
-  if (input.route !== "direct_card") return result;
+  if (route !== "direct_card") return result;
   return supabase.from("reminder_fund_allocations").insert({ owner_id: ownerId, case_id: input.caseId, payment_id: paymentId, amount: input.amount, allocated_at: input.paidAt, destination_type: "card", card_id: input.cardId, account_id: null, notes: "Pago directo a la tarjeta" });
 }
 
@@ -368,8 +373,8 @@ export async function updatePurchase(
       card_id: input.cardId,
       first_opportunity: input.firstOpportunity,
       second_opportunity: input.secondOpportunity,
-      installment_count: input.installmentCount,
-      first_installment_date: input.firstInstallmentDate,
+      installment_count: input.installmentCount ?? 1,
+      first_installment_date: input.firstInstallmentDate ?? input.firstOpportunity,
     })
     .eq("id", purchaseId)
     .eq("owner_id", ownerId);
@@ -404,7 +409,8 @@ export async function deleteParticipant(
     .from("reminder_case_participants")
     .delete()
     .eq("id", participantId)
-    .eq("owner_id", ownerId);
+    .eq("owner_id", ownerId)
+    .eq("is_owner", false);
 }
 
 export async function closeCase(supabase: SupabaseClient, ownerId: string, caseId: string, closed: boolean) {

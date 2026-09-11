@@ -2,121 +2,373 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
-import type { CreditCard, InstallmentRow, NewAllocationInput, NewPaymentInput, NewPurchaseInput, SavingsAccount, SharedCase } from "@/features/recordatorios/types";
-import { caseTotals, formatDate, formatMoney, getInstallments, getParticipantBalances, localDateValue, nextPayOpportunities } from "@/features/recordatorios/utils";
+import type {
+  CreditCard,
+  NewAllocationInput,
+  NewPaymentInput,
+  NewPurchaseInput,
+  SavingsAccount,
+  SharedCase,
+} from "@/features/recordatorios/types";
+import {
+  caseTotals,
+  formatDate,
+  formatMoney,
+  getParticipantBalances,
+  estimatedCardDates,
+  localDateValue,
+  nextPayOpportunities,
+} from "@/features/recordatorios/utils";
 
 type Props = {
-  sharedCase: SharedCase; cards: CreditCard[]; accounts: SavingsAccount[]; saving: boolean;
+  sharedCase: SharedCase;
+  cards: CreditCard[];
+  accounts: SavingsAccount[];
+  saving: boolean;
   onAddPurchase: (sharedCase: SharedCase, input: NewPurchaseInput) => Promise<boolean>;
   onPayment: (input: NewPaymentInput) => Promise<boolean>;
-  onUpdatePayment: (paymentId: string, input: NewPaymentInput) => Promise<boolean>;
   onAllocation: (input: NewAllocationInput) => Promise<boolean>;
-  onUpdateAllocation: (allocationId: string, input: NewAllocationInput) => Promise<boolean>;
-  onDeletePayment: (id: string) => Promise<boolean>; onDeleteAllocation: (id: string) => Promise<boolean>; onDeletePurchase: (id: string) => Promise<boolean>;
-  onUpdateCase: (id: string, title: string, notes: string) => Promise<boolean>;
-  onUpdatePurchase: (sharedCase: SharedCase, id: string, input: NewPurchaseInput) => Promise<boolean>;
-  onUpdateParticipantName: (id: string, name: string) => Promise<boolean>; onDeleteParticipant: (id: string) => Promise<boolean>;
-  onDeleteCase: (id: string) => Promise<boolean>;
-  onToggleClosed: (sharedCase: SharedCase) => Promise<boolean>; onBack: () => void;
+  onDeletePayment: (paymentId: string) => Promise<boolean>;
+  onDeleteAllocation: (allocationId: string) => Promise<boolean>;
+  onDeletePurchase: (purchaseId: string) => Promise<boolean>;
+  onUpdateCase: (caseId: string, title: string, notes: string) => Promise<boolean>;
+  onUpdatePurchase: (sharedCase: SharedCase, purchaseId: string, input: NewPurchaseInput) => Promise<boolean>;
+  onUpdateParticipantName: (participantId: string, name: string) => Promise<boolean>;
+  onDeleteParticipant: (participantId: string) => Promise<boolean>;
+  onToggleClosed: (sharedCase: SharedCase) => Promise<boolean>;
+  onBack: () => void;
 };
 
 const inputClass = "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-slate-100 outline-none focus:border-emerald-400 sm:text-sm";
-type PaymentForm = { participantId: string; amount: string; paidAt: string; method: string; route: "account" | "direct_card"; accountId: string; cardId: string; notes: string };
-const emptyPayment = (today: string): PaymentForm => ({ participantId: "", amount: "", paidAt: today, method: "Transferencia", route: "account", accountId: "", cardId: "", notes: "" });
+const statusLabel = { pending: "Pendiente", partial: "Parcial", paid: "Pagado", overdue: "Vencido" };
+const statusClass = { pending: "bg-slate-700 text-slate-200", partial: "bg-amber-500/15 text-amber-200", paid: "bg-emerald-500/15 text-emerald-200", overdue: "bg-red-500/15 text-red-200" };
 
-function MonthlySummary({ rows, cards }: { rows: Array<InstallmentRow & { collected: number; paidToCard: number }>; cards: CreditCard[] }) {
-  const grouped = new Map<string, { month: string; cardId: string | null; total: number; collected: number; paid: number }>();
-  rows.forEach((row) => { const key = `${row.dueDate.slice(0, 7)}-${row.cardId ?? "none"}`; const value = grouped.get(key) ?? { month: `${row.dueDate.slice(0, 7)}-01`, cardId: row.cardId, total: 0, collected: 0, paid: 0 }; value.total += row.total; value.collected += row.collected; value.paid += row.paidToCard; grouped.set(key, value); });
-  return <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{[...grouped.values()].sort((a, b) => a.month.localeCompare(b.month)).map((item) => <article key={`${item.month}-${item.cardId}`} className="rounded-xl bg-slate-950/60 p-3"><p className="text-xs text-slate-500">{formatDate(item.month)} · {cards.find((card) => card.id === item.cardId)?.name ?? "Sin tarjeta"}</p><p className="mt-1 text-lg font-semibold text-slate-100">Cuota combinada {formatMoney(item.total)}</p><p className="mt-1 text-xs text-slate-400">Recibido {formatMoney(item.collected)} · A TC {formatMoney(item.paid)}</p></article>)}</div>;
+function formatCompactDate(value: string | null) {
+  if (!value) return "—";
+  return new Date(`${value}T12:00:00`).toLocaleDateString("es-SV", {
+    day: "numeric",
+    month: "short",
+  });
 }
 
 export function SharedCaseDetail(props: Props) {
   const { sharedCase, cards, accounts, saving } = props;
-  const today = localDateValue();
   const balances = useMemo(() => getParticipantBalances(sharedCase), [sharedCase]);
   const totals = useMemo(() => caseTotals(sharedCase), [sharedCase]);
-  const installments = useMemo(() => getInstallments(sharedCase), [sharedCase]);
-  const installmentProgress = useMemo(() => {
-    const received = Object.fromEntries(sharedCase.participants.map((person) => [person.id, sharedCase.payments.filter((item) => item.participantId === person.id).reduce((sum, item) => sum + item.amount, 0)]));
-    const cardPaid: Record<string, number> = {};
-    sharedCase.allocations.forEach((item) => { if (item.cardId) cardPaid[item.cardId] = (cardPaid[item.cardId] ?? 0) + item.amount; });
-    return installments.map((row) => {
-      const collected = sharedCase.participants.reduce((sum, person) => { const due = row.participantAmounts[person.id] ?? 0; const applied = Math.min(received[person.id] ?? 0, due); received[person.id] = Math.max(0, (received[person.id] ?? 0) - applied); return sum + applied; }, 0);
-      const cardKey = row.cardId ?? "";
-      const paidToCard = Math.min(cardPaid[cardKey] ?? 0, row.total);
-      cardPaid[cardKey] = Math.max(0, (cardPaid[cardKey] ?? 0) - paidToCard);
-      return { ...row, collected, paidToCard };
-    });
-  }, [installments, sharedCase.allocations, sharedCase.participants, sharedCase.payments]);
   const [panel, setPanel] = useState<"none" | "purchase" | "payment" | "allocation">("none");
   const [shareMode, setShareMode] = useState(false);
-  const [caseEdit, setCaseEdit] = useState(false);
-  const [caseValues, setCaseValues] = useState({ title: sharedCase.title, notes: sharedCase.notes });
-  const [editingPurchase, setEditingPurchase] = useState<string | null>(null);
-  const [editingPayment, setEditingPayment] = useState<string | null>(null);
-  const [editingAllocation, setEditingAllocation] = useState<string | null>(null);
-  const [editingPerson, setEditingPerson] = useState<string | null>(null);
-  const [personName, setPersonName] = useState("");
-  const [purchase, setPurchase] = useState({ description: "", purchaseDate: today, amount: "", cardId: cards[0]?.id ?? "", installmentCount: 12, firstInstallmentDate: nextPayOpportunities(today)[0], participantAmounts: {} as Record<string, string> });
-  const [payment, setPayment] = useState<PaymentForm>(emptyPayment(today));
-  const [allocation, setAllocation] = useState({ paymentId: "", amount: "", allocatedAt: today, destinationType: "card" as const, cardId: cards[0]?.id ?? "", accountId: "", notes: "" });
+  const [highlighted, setHighlighted] = useState("");
+  const [caseFormOpen, setCaseFormOpen] = useState(false);
+  const [caseTitle, setCaseTitle] = useState(sharedCase.title);
+  const [caseNotes, setCaseNotes] = useState(sharedCase.notes);
+  const [editingPurchaseId, setEditingPurchaseId] = useState<string | null>(null);
+  const [editingPurchase, setEditingPurchase] = useState<NewPurchaseInput | null>(null);
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [participantName, setParticipantName] = useState("");
+  const today = localDateValue();
+  const dates = nextPayOpportunities(today);
+  const [purchase, setPurchase] = useState({ description: "", amount: "", purchaseDate: today, cardId: "", firstOpportunity: dates[0], secondOpportunity: dates[1] });
+  const [payment, setPayment] = useState({ participantId: "", amount: "", paidAt: today, method: "Transferencia", notes: "" });
+  const [allocation, setAllocation] = useState({ paymentId: "", amount: "", allocatedAt: today, destinationType: "card" as NewAllocationInput["destinationType"], cardId: "", accountId: "", notes: "" });
 
-  const paymentInput = (): NewPaymentInput => ({ caseId: sharedCase.id, participantId: payment.participantId, amount: Number(payment.amount), paidAt: payment.paidAt, method: payment.method, route: payment.route, accountId: payment.route === "account" ? payment.accountId || null : null, cardId: payment.route === "direct_card" ? payment.cardId || null : null, notes: payment.notes });
-  function shareValue(id: string) { return purchase.participantAmounts[id] ?? (sharedCase.participants.length ? (Number(purchase.amount || 0) / sharedCase.participants.length).toFixed(2) : ""); }
-  function purchaseInput(): NewPurchaseInput {
-    const second = nextPayOpportunities(purchase.firstInstallmentDate)[0];
-    return { description: purchase.description, purchaseDate: purchase.purchaseDate, amount: Number(purchase.amount), cardId: purchase.cardId || null, installmentCount: purchase.installmentCount, firstInstallmentDate: purchase.firstInstallmentDate, firstOpportunity: purchase.firstInstallmentDate, secondOpportunity: second, participantAmounts: Object.fromEntries(sharedCase.participants.map((person) => [person.id, Number(shareValue(person.id))])) };
+  function changePurchaseDate(value: string) {
+    const [firstOpportunity, secondOpportunity] = nextPayOpportunities(value);
+    setPurchase({ ...purchase, purchaseDate: value, firstOpportunity, secondOpportunity });
   }
 
-  async function savePurchase(event: FormEvent) {
+  async function submitPurchase(event: FormEvent) {
     event.preventDefault();
-    const input = purchaseInput();
-    const sum = Object.values(input.participantAmounts ?? {}).reduce((result, value) => result + value, 0);
-    if (Math.abs(sum - input.amount) > 0.005) return alert("La distribución debe sumar exactamente el monto de la compra.");
-    const ok = editingPurchase ? await props.onUpdatePurchase(sharedCase, editingPurchase, input) : await props.onAddPurchase(sharedCase, input);
-    if (ok) { setEditingPurchase(null); setPanel("none"); setPurchase({ description: "", purchaseDate: today, amount: "", cardId: cards[0]?.id ?? "", installmentCount: 12, firstInstallmentDate: nextPayOpportunities(today)[0], participantAmounts: {} }); }
+    const success = await props.onAddPurchase(sharedCase, { ...purchase, amount: Number(purchase.amount), cardId: purchase.cardId || null });
+    if (success) {
+      const nextDates = nextPayOpportunities(today);
+      setPurchase({ description: "", amount: "", purchaseDate: today, cardId: "", firstOpportunity: nextDates[0], secondOpportunity: nextDates[1] });
+      setPanel("none");
+    }
   }
-  async function savePayment(event: FormEvent) {
+
+  async function submitPayment(event: FormEvent) {
     event.preventDefault();
-    if (payment.route === "account" && !payment.accountId) return alert("Selecciona la cuenta donde recibiste el dinero.");
-    if (payment.route === "direct_card" && !payment.cardId) return alert("Selecciona la tarjeta pagada.");
-    const ok = editingPayment ? await props.onUpdatePayment(editingPayment, paymentInput()) : await props.onPayment(paymentInput());
-    if (ok) { setEditingPayment(null); setPanel("none"); setPayment(emptyPayment(today)); }
+    const pending = balances.find((item) => item.id === payment.participantId)?.pending ?? 0;
+    if (Number(payment.amount) > pending + 0.005 && !window.confirm("El aporte supera el saldo pendiente de esta persona. ¿Registrarlo de todas formas?")) return;
+    const success = await props.onPayment({ caseId: sharedCase.id, participantId: payment.participantId, amount: Number(payment.amount), paidAt: payment.paidAt, method: payment.method, notes: payment.notes });
+    if (success) {
+      setPayment({ participantId: "", amount: "", paidAt: today, method: "Transferencia", notes: "" });
+      setPanel("none");
+    }
   }
-  async function saveAllocation(event: FormEvent) {
+
+  async function submitAllocation(event: FormEvent) {
     event.preventDefault();
-    const source = sharedCase.payments.find((item) => item.id === allocation.paymentId);
-    const used = sharedCase.allocations.filter((item) => item.paymentId === allocation.paymentId).reduce((sum, item) => sum + item.amount, 0);
-    const previous = editingAllocation ? sharedCase.allocations.find((item) => item.id === editingAllocation)?.amount ?? 0 : 0;
-    if (Number(allocation.amount) > (source?.amount ?? 0) - used + previous + 0.005) return alert("El monto supera el aporte disponible.");
-    const input: NewAllocationInput = { caseId: sharedCase.id, paymentId: allocation.paymentId, amount: Number(allocation.amount), allocatedAt: allocation.allocatedAt, destinationType: "card", cardId: allocation.cardId || null, accountId: null, notes: allocation.notes };
-    const ok = editingAllocation ? await props.onUpdateAllocation(editingAllocation, input) : await props.onAllocation(input);
-    if (ok) { setEditingAllocation(null); setPanel("none"); }
+    const sourcePayment = sharedCase.payments.find((item) => item.id === allocation.paymentId);
+    const alreadyAllocated = sharedCase.allocations.filter((item) => item.paymentId === allocation.paymentId).reduce((sum, item) => sum + item.amount, 0);
+    const sourceAvailable = Math.max(0, (sourcePayment?.amount ?? 0) - alreadyAllocated);
+    if (Number(allocation.amount) > sourceAvailable + 0.005) {
+      alert("No puedes destinar más de lo que queda disponible en ese abono.");
+      return;
+    }
+    if (allocation.destinationType === "card" && !allocation.cardId) return alert("Selecciona una tarjeta.");
+    if (allocation.destinationType === "savings" && !allocation.accountId) return alert("Selecciona una cuenta.");
+    const success = await props.onAllocation({ caseId: sharedCase.id, paymentId: allocation.paymentId, amount: Number(allocation.amount), allocatedAt: allocation.allocatedAt, destinationType: allocation.destinationType, cardId: allocation.cardId || null, accountId: allocation.accountId || null, notes: allocation.notes });
+    if (success) {
+      setAllocation({ paymentId: "", amount: "", allocatedAt: today, destinationType: "card", cardId: "", accountId: "", notes: "" });
+      setPanel("none");
+    }
   }
 
-  if (shareMode) return <div className="mx-auto max-w-2xl"><Button variant="secondary" onClick={() => setShareMode(false)}>Volver al caso</Button><section className="mt-3 rounded-2xl border border-emerald-400/40 bg-slate-900 p-5"><h1 className="text-2xl font-semibold text-white">{sharedCase.title}</h1><p className="mt-1 text-sm text-slate-400">Plan de cuotas al {formatDate(today)}</p><div className="mt-4 space-y-2">{balances.map((item) => <div key={item.id} className="flex justify-between rounded-xl bg-slate-950/70 p-3"><span className="text-slate-200">{item.name}</span><span className="text-right text-sm text-slate-300">Cuota total {formatMoney(item.assigned)} · pagó {formatMoney(item.paid)} · <b className="text-amber-200">debe {formatMoney(item.pending)}</b></span></div>)}</div></section></div>;
+  async function deletePayment(paymentId: string) {
+    const linkedDestinations = sharedCase.allocations.filter(
+      (item) => item.paymentId === paymentId
+    ).length;
+    const detail = linkedDestinations
+      ? ` También se eliminarán ${linkedDestinations} ${linkedDestinations === 1 ? "destino vinculado" : "destinos vinculados"}.`
+      : "";
+    if (!window.confirm(`¿Eliminar este aporte? El saldo de la persona se recalculará.${detail}`)) return;
+    await props.onDeletePayment(paymentId);
+  }
 
-  return <div>
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><button onClick={props.onBack} className="text-sm font-semibold text-blue-300">← Todos los casos</button><h1 className="mt-2 text-3xl font-semibold text-slate-100">{sharedCase.title}</h1><p className="mt-1 text-sm text-slate-400">{sharedCase.purchases.length} compras · {sharedCase.participants.length} responsables · {sharedCase.status === "closed" ? "Cerrado" : "Activo"}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setCaseEdit(!caseEdit)}>Editar caso</Button><Button variant="secondary" onClick={() => setShareMode(true)}>Vista para captura</Button><Button variant="ghost" onClick={() => props.onToggleClosed(sharedCase)}>{sharedCase.status === "active" ? "Cerrar" : "Reabrir"}</Button><Button variant="danger" onClick={async () => { if (window.confirm("¿Eliminar todo el caso? Se borrarán compras, cuotas, aportes y abonos; esta acción no se puede deshacer.") && await props.onDeleteCase(sharedCase.id)) props.onBack(); }}>Eliminar caso</Button></div></div>
-    {caseEdit ? <form className="mt-4 grid gap-3 rounded-2xl border border-blue-500/30 bg-slate-900 p-4 md:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (await props.onUpdateCase(sharedCase.id, caseValues.title, caseValues.notes)) setCaseEdit(false); }}><label><span className="text-sm text-slate-400">Nombre</span><input className={inputClass} value={caseValues.title} onChange={(e) => setCaseValues({ ...caseValues, title: e.target.value })} /></label><label><span className="text-sm text-slate-400">Notas</span><input className={inputClass} value={caseValues.notes} onChange={(e) => setCaseValues({ ...caseValues, notes: e.target.value })} /></label><Button type="submit">Guardar</Button></form> : null}
+  async function deleteAllocation(allocationId: string) {
+    if (!window.confirm("¿Eliminar este destino? El dinero volverá a aparecer como aporte sin destinar.")) return;
+    await props.onDeleteAllocation(allocationId);
+  }
 
-    <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[["Compras", totals.purchaseTotal], ["Por recibir", totals.pending], ["Recibido", totals.received], ["Abonado a TC", totals.cardPaid], ["Recibido sin abonar", totals.unallocated]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{formatMoney(Number(value))}</p></article>)}</section>
-    <div className="mt-5 flex flex-wrap gap-2"><Button onClick={() => { setEditingPurchase(null); setPanel(panel === "purchase" ? "none" : "purchase"); }}>+ Nueva compra</Button><Button variant="secondary" onClick={() => { setEditingPayment(null); setPayment(emptyPayment(today)); setPanel(panel === "payment" ? "none" : "payment"); }}>Registrar aporte</Button><Button variant="secondary" onClick={() => { setEditingAllocation(null); setPanel(panel === "allocation" ? "none" : "allocation"); }}>Abonar a tarjeta</Button></div>
+  async function deletePurchase(purchaseId: string) {
+    if (!window.confirm("¿Eliminar esta compra? Se recalculará lo asignado y lo pendiente de todas las personas.")) return;
+    await props.onDeletePurchase(purchaseId);
+  }
 
-    {panel === "purchase" ? <form onSubmit={savePurchase} className="mt-4 rounded-2xl border border-emerald-500/30 bg-slate-900 p-4"><h2 className="font-semibold text-slate-100">{editingPurchase ? "Editar compra" : "Agregar compra al plan"}</h2><div className="mt-3 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Descripción</span><input className={inputClass} value={purchase.description} onChange={(e) => setPurchase({ ...purchase, description: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={purchase.amount} onChange={(e) => setPurchase({ ...purchase, amount: e.target.value, participantAmounts: {} })} required /></label><label><span className="text-sm text-slate-400">Fecha de compra</span><input className={inputClass} type="date" value={purchase.purchaseDate} onChange={(e) => setPurchase({ ...purchase, purchaseDate: e.target.value })} /></label><label><span className="text-sm text-slate-400">Tarjeta</span><select className={inputClass} value={purchase.cardId} onChange={(e) => setPurchase({ ...purchase, cardId: e.target.value })} required><option value="">Seleccionar</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label><label><span className="text-sm text-slate-400">Cuotas</span><input className={inputClass} type="number" min="1" max="120" value={purchase.installmentCount} onChange={(e) => setPurchase({ ...purchase, installmentCount: Number(e.target.value) })} /></label><label><span className="text-sm text-slate-400">Primera cuota</span><input className={inputClass} type="date" value={purchase.firstInstallmentDate} onChange={(e) => setPurchase({ ...purchase, firstInstallmentDate: e.target.value })} /></label></div><div className="mt-4 grid gap-2 sm:grid-cols-2">{sharedCase.participants.map((person) => <label key={person.id} className="grid grid-cols-[1fr_130px] items-center gap-2 text-sm text-slate-300"><span>{person.name}</span><input className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" type="number" min="0" step="0.01" value={shareValue(person.id)} onChange={(e) => setPurchase({ ...purchase, participantAmounts: { ...purchase.participantAmounts, [person.id]: e.target.value } })} /></label>)}</div><div className="mt-4 flex gap-2"><Button type="submit" disabled={saving}>Guardar compra</Button><Button variant="secondary" onClick={() => setPanel("none")}>Cancelar</Button></div></form> : null}
+  async function saveCase(event: FormEvent) {
+    event.preventDefault();
+    if (!caseTitle.trim()) return;
+    if (await props.onUpdateCase(sharedCase.id, caseTitle, caseNotes)) {
+      setCaseFormOpen(false);
+    }
+  }
 
-    {panel === "payment" ? <form onSubmit={savePayment} className="mt-4 rounded-2xl border border-blue-500/30 bg-slate-900 p-4"><h2 className="font-semibold text-slate-100">{editingPayment ? "Editar aporte" : "Registrar aporte"}</h2><div className="mt-3 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Persona</span><select className={inputClass} value={payment.participantId} onChange={(e) => { const balance = balances.find((item) => item.id === e.target.value); setPayment({ ...payment, participantId: e.target.value, amount: balance?.pending.toFixed(2) ?? "" }); }} required><option value="">Seleccionar</option>{balances.map((item) => <option key={item.id} value={item.id}>{item.name} · debe {formatMoney(item.pending)}</option>)}</select></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={payment.paidAt} onChange={(e) => setPayment({ ...payment, paidAt: e.target.value })} /></label><label><span className="text-sm text-slate-400">Ruta</span><select className={inputClass} value={payment.route} onChange={(e) => setPayment({ ...payment, route: e.target.value as "account" | "direct_card" })}><option value="account">Depositó a mi cuenta</option><option value="direct_card">Pagó directamente a mi TC</option></select></label>{payment.route === "account" ? <label><span className="text-sm text-slate-400">Cuenta receptora</span><select className={inputClass} value={payment.accountId} onChange={(e) => setPayment({ ...payment, accountId: e.target.value })} required><option value="">Seleccionar</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label> : <label><span className="text-sm text-slate-400">Tarjeta pagada</span><select className={inputClass} value={payment.cardId} onChange={(e) => setPayment({ ...payment, cardId: e.target.value })} required><option value="">Seleccionar</option>{cards.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}<label><span className="text-sm text-slate-400">Medio</span><input className={inputClass} value={payment.method} onChange={(e) => setPayment({ ...payment, method: e.target.value })} /></label><label className="md:col-span-2"><span className="text-sm text-slate-400">Nota o referencia</span><input className={inputClass} value={payment.notes} onChange={(e) => setPayment({ ...payment, notes: e.target.value })} /></label></div><div className="mt-4 flex gap-2"><Button type="submit" disabled={saving}>Guardar aporte</Button><Button variant="secondary" onClick={() => setPanel("none")}>Cancelar</Button></div></form> : null}
+  async function savePurchase(purchaseId: string) {
+    if (
+      !editingPurchase?.description.trim() ||
+      editingPurchase.amount <= 0 ||
+      !editingPurchase.purchaseDate ||
+      !editingPurchase.firstOpportunity ||
+      !editingPurchase.secondOpportunity
+    ) return;
+    if (editingPurchase.secondOpportunity <= editingPurchase.firstOpportunity) {
+      alert("La segunda oportunidad debe ser posterior a la primera.");
+      return;
+    }
+    if (await props.onUpdatePurchase(sharedCase, purchaseId, editingPurchase)) {
+      setEditingPurchaseId(null);
+      setEditingPurchase(null);
+    }
+  }
 
-    {panel === "allocation" ? <form onSubmit={saveAllocation} className="mt-4 rounded-2xl border border-amber-500/30 bg-slate-900 p-4"><h2 className="font-semibold text-slate-100">Abonar dinero recibido a la tarjeta</h2><div className="mt-3 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Aporte recibido</span><select className={inputClass} value={allocation.paymentId} onChange={(e) => { const source = sharedCase.payments.find((item) => item.id === e.target.value); const used = sharedCase.allocations.filter((item) => item.paymentId === e.target.value).reduce((sum, item) => sum + item.amount, 0); setAllocation({ ...allocation, paymentId: e.target.value, amount: source ? Math.max(0, source.amount - used).toFixed(2) : "" }); }} required><option value="">Seleccionar</option>{sharedCase.payments.filter((item) => item.route === "account").map((item) => <option key={item.id} value={item.id}>{balances.find((person) => person.id === item.participantId)?.name} · {formatMoney(item.amount)}</option>)}</select></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={allocation.amount} onChange={(e) => setAllocation({ ...allocation, amount: e.target.value })} /></label><label><span className="text-sm text-slate-400">Tarjeta</span><select className={inputClass} value={allocation.cardId} onChange={(e) => setAllocation({ ...allocation, cardId: e.target.value })} required><option value="">Seleccionar</option>{cards.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={allocation.allocatedAt} onChange={(e) => setAllocation({ ...allocation, allocatedAt: e.target.value })} /></label><label className="md:col-span-2"><span className="text-sm text-slate-400">Nota</span><input className={inputClass} value={allocation.notes} onChange={(e) => setAllocation({ ...allocation, notes: e.target.value })} /></label></div><Button type="submit" className="mt-4" disabled={saving}>Registrar abono a TC</Button></form> : null}
+  async function saveParticipantName(participantId: string) {
+    const normalizedName = participantName.trim().toLocaleLowerCase("es");
+    if (!normalizedName) return;
+    const duplicate = sharedCase.participants.some(
+      (item) =>
+        item.id !== participantId &&
+        item.name.trim().toLocaleLowerCase("es") === normalizedName
+    );
+    if (duplicate) {
+      alert("Ya existe otro participante con ese nombre.");
+      return;
+    }
+    if (await props.onUpdateParticipantName(participantId, participantName)) {
+      setEditingParticipantId(null);
+      setParticipantName("");
+    }
+  }
 
-    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70"><div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Responsables y saldos</h2></div>{balances.map((item) => <article key={item.id} className="grid gap-3 border-b border-slate-800 p-4 md:grid-cols-[1fr_repeat(3,120px)] md:items-center"><div>{editingPerson === item.id ? <div className="flex gap-2"><input className="rounded-xl bg-slate-950 px-3 py-2" value={personName} onChange={(e) => setPersonName(e.target.value)} /><Button onClick={async () => { if (await props.onUpdateParticipantName(item.id, personName)) setEditingPerson(null); }}>Guardar</Button></div> : <><p className="font-semibold text-slate-100">{item.name}</p><div className="mt-2 flex gap-2"><Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => { setEditingPerson(item.id); setPersonName(item.name); }}>Editar</Button>{sharedCase.participants.length > 1 ? <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => window.confirm("¿Eliminar a esta persona y sus aportes? Revisa después la distribución de cada compra.") && props.onDeleteParticipant(item.id)}>Eliminar</Button> : null}</div></>}</div><div><p className="text-xs text-slate-500">Asignado</p>{formatMoney(item.assigned)}</div><div><p className="text-xs text-slate-500">Recibido</p>{formatMoney(item.paid)}</div><div><p className="text-xs text-slate-500">Pendiente</p><span className="text-amber-200">{formatMoney(item.pending)}</span></div></article>)}</section>
+  async function deleteParticipant(participantId: string) {
+    if (sharedCase.participants.length <= 2) {
+      alert("El caso debe conservar al menos una persona además de tu parte.");
+      return;
+    }
+    const payments = sharedCase.payments.filter(
+      (item) => item.participantId === participantId
+    );
+    const paymentIds = new Set(payments.map((item) => item.id));
+    const destinations = sharedCase.allocations.filter((item) =>
+      paymentIds.has(item.paymentId)
+    ).length;
+    const detail = payments.length || destinations
+      ? ` También se eliminarán ${payments.length} ${payments.length === 1 ? "aporte" : "aportes"} y ${destinations} ${destinations === 1 ? "destino" : "destinos"} vinculados.`
+      : "";
+    if (!window.confirm(`¿Quitar a esta persona del caso? Los montos se repartirán nuevamente entre quienes permanezcan.${detail}`)) return;
+    await props.onDeleteParticipant(participantId);
+  }
 
-    <section className="mt-6 rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Calendario acumulado de cuotas</h2><p className="mt-1 text-sm text-slate-400">Los aportes y abonos se aplican primero a las cuotas más antiguas. Una compra nueva se suma desde su propio mes inicial.</p><MonthlySummary rows={installmentProgress} cards={cards} /><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-slate-500"><tr><th className="p-2">Vencimiento</th><th className="p-2">Compra</th><th className="p-2">Cuota</th>{sharedCase.participants.map((p) => <th key={p.id} className="p-2">{p.name}</th>)}<th className="p-2">Recibido</th><th className="p-2">A TC</th><th className="p-2 text-right">Total</th></tr></thead><tbody>{installmentProgress.map((row) => <tr key={`${row.purchaseId}-${row.number}`} className="border-t border-slate-800"><td className="p-2">{formatDate(row.dueDate)}</td><td className="p-2 text-slate-300">{row.purchaseDescription}</td><td className="p-2">{row.number}/{sharedCase.purchases.find((p) => p.id === row.purchaseId)?.installmentCount}</td>{sharedCase.participants.map((p) => <td key={p.id} className="p-2">{formatMoney(row.participantAmounts[p.id] ?? 0)}</td>)}<td className={`p-2 ${row.collected + 0.005 >= row.total ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.collected)}</td><td className={`p-2 ${row.paidToCard + 0.005 >= row.total ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.paidToCard)}</td><td className="p-2 text-right font-semibold">{formatMoney(row.total)}</td></tr>)}</tbody></table></div></section>
+  if (shareMode) {
+    return (
+      <div className="mx-auto max-w-xl">
+        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
+          <Button variant="secondary" onClick={() => setShareMode(false)}>Volver al caso</Button>
+          <label className="flex-1 text-sm text-slate-400">Destacar a alguien<select className={inputClass} value={highlighted} onChange={(e) => setHighlighted(e.target.value)}><option value="">Todos por igual</option>{balances.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        </div>
+        <section className="overflow-hidden rounded-2xl border border-emerald-300/40 bg-[#08131f] shadow-xl shadow-black/40">
+          <div className="bg-gradient-to-r from-emerald-500/25 to-blue-500/20 px-4 py-3">
+            <div className="flex items-end justify-between gap-3">
+              <h1 className="text-xl font-semibold text-white">{sharedCase.title}</h1>
+              <p className="shrink-0 text-[10px] text-slate-300">{formatDate(today)} · {sharedCase.purchases.length} {sharedCase.purchases.length === 1 ? "compra" : "compras"}</p>
+            </div>
+          </div>
+          <div className="border-t border-emerald-300/20 bg-emerald-400/10 px-3 py-2">
+            <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Detalle de la deuda</p>
+            <div className="space-y-1">
+              {sharedCase.purchases.map((item) => {
+                const card = cards.find((entry) => entry.id === item.cardId);
+                return (
+                  <div key={item.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate text-xs font-semibold text-white">{card?.name ?? "Tarjeta sin asignar"}</p><p className="truncate text-[9px] text-slate-300">{item.description} · {formatDate(item.purchaseDate)}</p></div>
+                    <p className="shrink-0 text-sm font-semibold text-white">{formatMoney(item.amount)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 border-y border-slate-700 bg-slate-950/60 text-center">
+            <div className="px-2 py-2"><p className="text-[10px] text-slate-400">Monto deuda</p><p className="text-sm font-semibold text-white">{formatMoney(totals.purchaseTotal)}</p></div>
+            <div className="border-x border-slate-700 px-2 py-2"><p className="text-[10px] text-slate-400">Recogido</p><p className="text-sm font-semibold text-emerald-300">{formatMoney(totals.received)}</p></div>
+            <div className="px-2 py-2"><p className="text-[10px] text-slate-400">Pendiente</p><p className="text-sm font-semibold text-amber-200">{formatMoney(totals.pending)}</p></div>
+          </div>
+          <div className="divide-y divide-slate-700 px-3">
+            {balances.map((balance) => (
+              <article key={balance.id} className={`-mx-3 px-3 py-1.5 transition ${highlighted === balance.id ? "bg-amber-400/15 ring-1 ring-inset ring-amber-300/50" : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-semibold text-white">{balance.name}</p><span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span></div></div>
+                  <p className="shrink-0 text-right text-xs font-semibold text-white">{formatMoney(balance.assigned)}</p>
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-2 text-[9px]"><p className="text-slate-400">Aportó {formatMoney(balance.paid)} · Debe {formatMoney(balance.pending)}</p>{balance.pending > 0 ? <p className="shrink-0 text-slate-300">{balance.status === "overdue" ? `Venció ${formatCompactDate(balance.firstOpportunity)}` : `Puede pagar ${formatCompactDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatCompactDate(balance.secondOpportunity)}` : ""}`}</p> : null}</div>
+              </article>
+            ))}
+          </div>
+        </section>
+        <p className="mt-3 text-center text-xs text-slate-500 print:hidden">Esta vista oculta tarjetas, cuentas y el destino privado del dinero. Toma la captura desde aquí.</p>
+      </div>
+    );
+  }
 
-    <section className="mt-6 grid gap-4 xl:grid-cols-3">
-      <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Compras</h2><div className="mt-3 space-y-3">{sharedCase.purchases.map((item) => <article key={item.id} className="rounded-xl bg-slate-950/60 p-3"><div className="flex justify-between"><div><p className="text-slate-100">{item.description}</p><p className="text-xs text-slate-500">{item.installmentCount} cuotas desde {formatDate(item.firstInstallmentDate)}</p></div><b>{formatMoney(item.amount)}</b></div><div className="mt-3 flex gap-2"><Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => { setEditingPurchase(item.id); setPurchase({ description: item.description, purchaseDate: item.purchaseDate, amount: String(item.amount), cardId: item.cardId ?? "", installmentCount: item.installmentCount, firstInstallmentDate: item.firstInstallmentDate, participantAmounts: Object.fromEntries(item.shares.map((share) => [share.participantId, String(share.amount)])) }); setPanel("purchase"); }}>Editar</Button><Button variant="danger" className="px-2 py-1 text-xs" onClick={() => window.confirm("¿Eliminar esta compra y todo su calendario de cuotas?") && props.onDeletePurchase(item.id)}>Eliminar</Button></div></article>)}</div></div>
-      <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Aportes</h2><div className="mt-3 space-y-3">{sharedCase.payments.map((item) => <article key={item.id} className="rounded-xl bg-slate-950/60 p-3"><div className="flex justify-between"><div><p>{balances.find((p) => p.id === item.participantId)?.name}</p><p className="text-xs text-slate-500">{formatDate(item.paidAt)} · {item.route === "direct_card" ? "Directo a TC" : accounts.find((a) => a.id === item.accountId)?.name ?? "Cuenta eliminada"}</p></div><b className="text-emerald-300">{formatMoney(item.amount)}</b></div><div className="mt-3 flex gap-2"><Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => { setEditingPayment(item.id); setPayment({ participantId: item.participantId, amount: String(item.amount), paidAt: item.paidAt, method: item.method, route: item.route, accountId: item.accountId ?? "", cardId: item.cardId ?? "", notes: item.notes }); setPanel("payment"); }}>Editar</Button><Button variant="danger" className="px-2 py-1 text-xs" onClick={() => window.confirm("¿Eliminar este aporte y sus destinos vinculados?") && props.onDeletePayment(item.id)}>Eliminar</Button></div></article>)}</div></div>
-      <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Abonos a tarjeta</h2><div className="mt-3 space-y-3">{sharedCase.allocations.map((item) => <article key={item.id} className="rounded-xl bg-slate-950/60 p-3"><div className="flex justify-between"><div><p>{cards.find((c) => c.id === item.cardId)?.name ?? "Tarjeta eliminada"}</p><p className="text-xs text-slate-500">{formatDate(item.allocatedAt)}{item.notes ? ` · ${item.notes}` : ""}</p></div><b>{formatMoney(item.amount)}</b></div>{item.notes === "Pago directo a la tarjeta" ? <p className="mt-2 text-xs text-blue-300">Se edita o elimina desde el aporte directo.</p> : <div className="mt-3 flex gap-2"><Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => { setEditingAllocation(item.id); setAllocation({ paymentId: item.paymentId, amount: String(item.amount), allocatedAt: item.allocatedAt, destinationType: "card", cardId: item.cardId ?? "", accountId: "", notes: item.notes }); setPanel("allocation"); }}>Editar</Button><Button variant="danger" className="px-2 py-1 text-xs" onClick={() => window.confirm("¿Eliminar este abono a tarjeta?") && props.onDeleteAllocation(item.id)}>Eliminar</Button></div>}</article>)}</div></div>
-    </section>
-  </div>;
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><button onClick={props.onBack} className="text-sm font-semibold text-blue-300 hover:text-blue-200">← Todos los casos</button><h1 className="mt-2 text-3xl font-semibold text-slate-100">{sharedCase.title}</h1><p className="mt-1 text-sm text-slate-400">{sharedCase.purchases.length} compras · {sharedCase.participants.length} participantes · {sharedCase.status === "closed" ? "Cerrado" : "Activo"}</p></div>
+        <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => { setCaseTitle(sharedCase.title); setCaseNotes(sharedCase.notes); setCaseFormOpen(true); }}>Editar caso</Button><Button variant="secondary" onClick={() => setShareMode(true)}>Vista para captura</Button><Button variant="ghost" onClick={() => props.onToggleClosed(sharedCase)} disabled={saving}>{sharedCase.status === "active" ? "Cerrar caso" : "Reabrir caso"}</Button></div>
+      </div>
+
+      {caseFormOpen ? (
+        <form onSubmit={saveCase} className="mt-5 rounded-2xl border border-blue-500/30 bg-slate-900/80 p-4">
+          <h2 className="font-semibold text-slate-100">Editar caso</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label><span className="text-sm text-slate-400">Nombre del caso</span><input className={inputClass} value={caseTitle} onChange={(event) => setCaseTitle(event.target.value)} required /></label>
+            <label><span className="text-sm text-slate-400">Notas privadas</span><input className={inputClass} value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} /></label>
+          </div>
+          <div className="mt-4 flex gap-2"><Button type="submit" disabled={saving || !caseTitle.trim()}>Guardar caso</Button><Button variant="secondary" onClick={() => setCaseFormOpen(false)}>Cancelar</Button></div>
+        </form>
+      ) : null}
+
+      <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {[['Compras', totals.purchaseTotal], ['Por recoger', totals.collectable], ['Recogido', totals.received], ['Pendiente', totals.pending], ['Sin destinar', totals.unallocated]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{formatMoney(Number(value))}</p></article>)}
+      </section>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button onClick={() => setPanel(panel === "purchase" ? "none" : "purchase")}>+ Agregar compra</Button>
+        <Button variant="secondary" onClick={() => setPanel(panel === "payment" ? "none" : "payment")}>Registrar aporte</Button>
+        <Button variant="secondary" onClick={() => setPanel(panel === "allocation" ? "none" : "allocation")}>Destinar dinero</Button>
+      </div>
+
+      {panel === "purchase" ? <form onSubmit={submitPurchase} className="mt-4 rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4"><h2 className="font-semibold text-slate-100">Agregar compra al mismo caso</h2><p className="mt-1 text-xs text-slate-500">Se dividirá entre los mismos participantes y actualizará sus saldos.</p><div className="mt-4 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Descripción</span><input className={inputClass} value={purchase.description} onChange={(e) => setPurchase({ ...purchase, description: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={purchase.amount} onChange={(e) => setPurchase({ ...purchase, amount: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={purchase.purchaseDate} onChange={(e) => changePurchaseDate(e.target.value)} required /></label><label><span className="text-sm text-slate-400">Tarjeta</span><select className={inputClass} value={purchase.cardId} onChange={(e) => setPurchase({ ...purchase, cardId: e.target.value })}><option value="">Sin asignar</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label><label><span className="text-sm text-slate-400">Primera oportunidad</span><input className={inputClass} type="date" value={purchase.firstOpportunity} onChange={(e) => setPurchase({ ...purchase, firstOpportunity: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Segunda oportunidad</span><input className={inputClass} type="date" min={purchase.firstOpportunity} value={purchase.secondOpportunity} onChange={(e) => setPurchase({ ...purchase, secondOpportunity: e.target.value })} required /></label></div><Button type="submit" disabled={saving} className="mt-4">Guardar compra</Button></form> : null}
+
+      {panel === "payment" ? <form onSubmit={submitPayment} className="mt-4 rounded-2xl border border-blue-500/30 bg-slate-900/80 p-4"><h2 className="font-semibold text-slate-100">Registrar aporte</h2><div className="mt-4 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Persona</span><select className={inputClass} value={payment.participantId} onChange={(e) => { const balance = balances.find((item) => item.id === e.target.value); setPayment({ ...payment, participantId: e.target.value, amount: balance?.pending ? String(balance.pending.toFixed(2)) : "", method: balance?.isOwner ? "Fondos propios" : "Transferencia" }); }} required><option value="">Seleccionar</option>{balances.map((item) => <option key={item.id} value={item.id}>{item.name} · debe {formatMoney(item.pending)}</option>)}</select></label><label><span className="text-sm text-slate-400">Monto aportado</span><input className={inputClass} type="number" min="0.01" step="0.01" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={payment.paidAt} onChange={(e) => setPayment({ ...payment, paidAt: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Medio</span><input className={inputClass} value={payment.method} onChange={(e) => setPayment({ ...payment, method: e.target.value })} /></label><label className="md:col-span-2"><span className="text-sm text-slate-400">Nota o referencia</span><input className={inputClass} value={payment.notes} onChange={(e) => setPayment({ ...payment, notes: e.target.value })} /></label></div><Button type="submit" disabled={saving} className="mt-4">Guardar aporte</Button></form> : null}
+
+      {panel === "allocation" ? <form onSubmit={submitAllocation} className="mt-4 rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4"><h2 className="font-semibold text-slate-100">¿Qué hiciste con el dinero?</h2><p className="mt-1 text-xs text-slate-500">Disponible sin destinar: {formatMoney(totals.unallocated)}</p><div className="mt-4 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Aporte registrado</span><select className={inputClass} value={allocation.paymentId} onChange={(e) => { const source = sharedCase.payments.find((item) => item.id === e.target.value); const used = sharedCase.allocations.filter((item) => item.paymentId === e.target.value).reduce((sum, item) => sum + item.amount, 0); setAllocation({ ...allocation, paymentId: e.target.value, amount: source ? String(Math.max(0, source.amount - used).toFixed(2)) : "" }); }} required><option value="">Seleccionar</option>{sharedCase.payments.map((item) => { const person = balances.find((balance) => balance.id === item.participantId); const used = sharedCase.allocations.filter((entry) => entry.paymentId === item.id).reduce((sum, entry) => sum + entry.amount, 0); const available = Math.max(0, item.amount - used); return <option key={item.id} value={item.id} disabled={available <= 0}>{person?.name} · {formatDate(item.paidAt)} · disponible {formatMoney(available)}</option>; })}</select></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={allocation.amount} onChange={(e) => setAllocation({ ...allocation, amount: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Destino</span><select className={inputClass} value={allocation.destinationType} onChange={(e) => setAllocation({ ...allocation, destinationType: e.target.value as NewAllocationInput["destinationType"] })}><option value="card">Abono a tarjeta</option><option value="savings">Guardado en cuenta</option><option value="other">Otro</option></select></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={allocation.allocatedAt} onChange={(e) => setAllocation({ ...allocation, allocatedAt: e.target.value })} required /></label>{allocation.destinationType === "card" ? <label><span className="text-sm text-slate-400">Tarjeta</span><select className={inputClass} value={allocation.cardId} onChange={(e) => setAllocation({ ...allocation, cardId: e.target.value })} required><option value="">Seleccionar</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label> : null}{allocation.destinationType === "savings" ? <label><span className="text-sm text-slate-400">Cuenta</span><select className={inputClass} value={allocation.accountId} onChange={(e) => setAllocation({ ...allocation, accountId: e.target.value })} required><option value="">Seleccionar</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label> : null}<label className="md:col-span-2"><span className="text-sm text-slate-400">Nota</span><input className={inputClass} value={allocation.notes} onChange={(e) => setAllocation({ ...allocation, notes: e.target.value })} /></label></div><Button type="submit" disabled={saving || totals.unallocated <= 0} className="mt-4">Guardar destino</Button></form> : null}
+
+      <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70">
+        <div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Quién debe y quién aportó</h2><p className="mt-1 text-sm text-slate-400">Edita nombres o quita a un hermano. Cada persona, incluida tu parte, registra su aporte completo.</p></div>
+        <div className="divide-y divide-slate-700">
+          {balances.map((balance) => (
+            <article key={balance.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(90px,0.7fr))_minmax(180px,1fr)] md:items-center">
+              <div>
+                {editingParticipantId === balance.id ? (
+                  <div><input className={inputClass} value={participantName} onChange={(event) => setParticipantName(event.target.value)} autoFocus /><div className="mt-2 flex flex-wrap gap-2"><Button disabled={saving || !participantName.trim()} className="px-3 py-1.5" onClick={() => saveParticipantName(balance.id)}>Guardar</Button><Button variant="secondary" className="px-3 py-1.5" onClick={() => setEditingParticipantId(null)}>Cancelar</Button></div></div>
+                ) : (
+                  <><p className="font-semibold text-slate-100">{balance.name}</p><span className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusClass[balance.status]}`}>{statusLabel[balance.status]}</span><div className="mt-2 flex flex-wrap gap-2"><Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => { setEditingParticipantId(balance.id); setParticipantName(balance.name); }}>Editar nombre</Button>{!balance.isOwner ? <Button variant="danger" className="px-2 py-1 text-xs" disabled={saving} onClick={() => deleteParticipant(balance.id)}>Quitar</Button> : null}</div></>
+                )}
+              </div>
+              <div><p className="text-xs text-slate-500">Asignado</p><p className="text-sm text-slate-200">{formatMoney(balance.assigned)}</p></div>
+              <div><p className="text-xs text-slate-500">Aportado</p><p className="text-sm text-emerald-300">{formatMoney(balance.paid)}</p></div>
+              <div><p className="text-xs text-slate-500">Debe</p><p className="text-sm font-semibold text-amber-200">{formatMoney(balance.pending)}</p></div>
+              <div><p className="text-xs text-slate-500">Oportunidades</p><p className="text-sm text-slate-300">{balance.pending <= 0 ? "—" : balance.status === "overdue" ? `Venció ${formatDate(balance.firstOpportunity)}` : `${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p></div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-3">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 className="font-semibold text-slate-100">Compras del caso</h2>
+          <div className="mt-3 space-y-3">
+            {sharedCase.purchases.length ? sharedCase.purchases.map((item) => {
+              const card = cards.find((entry) => entry.id === item.cardId);
+              const cardDates = estimatedCardDates(item.purchaseDate, card);
+              return (
+                <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
+                  <div className="flex justify-between gap-3"><div><p className="font-medium text-slate-100">{item.description}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.purchaseDate)} · {card?.name ?? "Sin tarjeta"}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></div>
+                  {editingPurchaseId === item.id && editingPurchase ? (
+                    <div className="mt-3 grid gap-3 border-t border-slate-800 pt-3 sm:grid-cols-2">
+                      <label className="sm:col-span-2"><span className="text-xs text-slate-400">Descripción</span><input className={inputClass} value={editingPurchase.description} onChange={(event) => setEditingPurchase({ ...editingPurchase, description: event.target.value })} /></label>
+                      <label><span className="text-xs text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={editingPurchase.amount} onChange={(event) => setEditingPurchase({ ...editingPurchase, amount: Number(event.target.value) })} /></label>
+                      <label><span className="text-xs text-slate-400">Fecha de compra</span><input className={inputClass} type="date" value={editingPurchase.purchaseDate} onChange={(event) => { const value = event.target.value; if (!value) { setEditingPurchase({ ...editingPurchase, purchaseDate: value }); return; } const opportunities = nextPayOpportunities(value); setEditingPurchase({ ...editingPurchase, purchaseDate: value, firstOpportunity: opportunities[0], secondOpportunity: opportunities[1] }); }} required /></label>
+                      <label className="sm:col-span-2"><span className="text-xs text-slate-400">Tarjeta</span><select className={inputClass} value={editingPurchase.cardId ?? ""} onChange={(event) => setEditingPurchase({ ...editingPurchase, cardId: event.target.value || null })}><option value="">Sin asignar</option>{cards.map((cardItem) => <option key={cardItem.id} value={cardItem.id}>{cardItem.name}</option>)}</select></label>
+                      <label><span className="text-xs text-slate-400">Primera oportunidad</span><input className={inputClass} type="date" value={editingPurchase.firstOpportunity} onChange={(event) => setEditingPurchase({ ...editingPurchase, firstOpportunity: event.target.value })} required /></label>
+                      <label><span className="text-xs text-slate-400">Segunda oportunidad</span><input className={inputClass} type="date" min={editingPurchase.firstOpportunity} value={editingPurchase.secondOpportunity} onChange={(event) => setEditingPurchase({ ...editingPurchase, secondOpportunity: event.target.value })} required /></label>
+                      <div className="flex flex-wrap gap-2 sm:col-span-2"><Button disabled={saving || !editingPurchase.description.trim() || editingPurchase.amount <= 0} onClick={() => savePurchase(item.id)}>Guardar compra</Button><Button variant="secondary" onClick={() => { setEditingPurchaseId(null); setEditingPurchase(null); }}>Cancelar</Button></div>
+                    </div>
+                  ) : null}
+                  <p className="mt-2 text-xs text-slate-400">Oportunidades: {formatDate(item.firstOpportunity)} o {formatDate(item.secondOpportunity)}</p>
+                  {cardDates ? <p className="mt-1 text-xs text-blue-300">Corte estimado: {formatDate(cardDates.cutDate)} · Pago de tarjeta: {formatDate(cardDates.dueDate)}</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-2"><Button variant="secondary" className="px-3 py-1.5" disabled={saving} onClick={() => { setEditingPurchaseId(item.id); setEditingPurchase({ description: item.description, amount: item.amount, purchaseDate: item.purchaseDate, cardId: item.cardId, firstOpportunity: item.firstOpportunity, secondOpportunity: item.secondOpportunity }); }}>Editar compra</Button><Button variant="danger" className="px-3 py-1.5" disabled={saving} onClick={() => deletePurchase(item.id)}>Eliminar compra</Button></div>
+                </article>
+              );
+            }) : <p className="text-sm text-slate-500">Este caso ya no tiene compras.</p>}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 className="font-semibold text-slate-100">Aportes registrados</h2>
+          <div className="mt-3 space-y-3">
+            {sharedCase.payments.length ? sharedCase.payments.map((item) => {
+              const person = balances.find((balance) => balance.id === item.participantId);
+              const linkedCount = sharedCase.allocations.filter((allocationItem) => allocationItem.paymentId === item.id).length;
+              return (
+                <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
+                  <div className="flex justify-between gap-3"><div><p className="text-sm font-medium text-slate-100">{person?.name ?? "Persona eliminada"}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.paidAt)} · {item.method}</p></div><p className="font-semibold text-emerald-300">{formatMoney(item.amount)}</p></div>
+                  {item.notes ? <p className="mt-2 text-xs text-slate-400">{item.notes}</p> : null}
+                  {linkedCount ? <p className="mt-2 text-xs text-amber-200">{linkedCount} {linkedCount === 1 ? "destino vinculado" : "destinos vinculados"}</p> : null}
+                  <Button variant="danger" className="mt-3 px-3 py-1.5" disabled={saving} onClick={() => deletePayment(item.id)}>Eliminar aporte</Button>
+                </article>
+              );
+            }) : <p className="text-sm text-slate-500">Todavía no hay aportes registrados.</p>}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 className="font-semibold text-slate-100">Destino de los aportes</h2>
+          <div className="mt-3 space-y-3">
+            {sharedCase.allocations.length ? sharedCase.allocations.map((item) => {
+              const destination = item.destinationType === "card" ? cards.find((card) => card.id === item.cardId)?.name : item.destinationType === "savings" ? accounts.find((account) => account.id === item.accountId)?.name : "Otro";
+              const sourcePayment = sharedCase.payments.find((paymentItem) => paymentItem.id === item.paymentId);
+              const sourcePerson = balances.find((balance) => balance.id === sourcePayment?.participantId);
+              return (
+                <article key={item.id} className="rounded-xl bg-slate-950/60 p-3">
+                  <div className="flex justify-between gap-3"><div><p className="text-sm text-slate-200">{destination ?? "Destino eliminado"}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.allocatedAt)} · abono de {sourcePerson?.name ?? "persona eliminada"}{item.notes ? ` · ${item.notes}` : ""}</p></div><p className="font-semibold text-slate-100">{formatMoney(item.amount)}</p></div>
+                  <Button variant="danger" className="mt-3 px-3 py-1.5" disabled={saving} onClick={() => deleteAllocation(item.id)}>Eliminar destino</Button>
+                </article>
+              );
+            }) : <p className="text-sm text-slate-500">Todavía no has destinado aportes.</p>}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
