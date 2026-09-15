@@ -56,8 +56,9 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 
 - Ruta y registro: `Pretty - Salon de belleza`, `/pretty-escritorio`; dominio `features/pretty-salon/`.
 - Ensamblador, hook y service: `PrettySalonDashboard`, `usePrettySalon`, `prettySalonService.ts`.
-- Tablas: `pretty_salon_transactions`, `pretty_salon_cash_transfers`, `pretty_salon_expense_payments`, `pretty_salon_loan_movements` y `pretty_salon_team_members` (esta última sostiene acceso compartido por correo mediante RLS).
+- Tablas: `pretty_salon_transactions`, `pretty_salon_cash_transfers`, `pretty_salon_expense_payments`, `pretty_salon_loan_movements`, `pretty_salon_team_members` y `pretty_salon_settlements`; esta última se instala mediante un SQL separado.
 - Función: panel de ingresos, gastos, caja, transferencias, pagos de gastos, préstamos, clientes, catálogo base de servicios y reportes mensuales. Gestiona movimientos pagados o pendientes y conserva migración de datos heredados desde `localStorage`.
+- La sección adicional `Cuadre` ofrece un asistente móvil de cinco pasos para conciliación quincenal, correcciones, salario con adelantos, pagos fijos, abono a tarjeta, comprobación final e historial. La primera quincena usa fecha contable 15 y la segunda el último día del mes; la fecha real del cierre se conserva por separado. Solo puede existir un cuadre por mes/quincena y un cuadre finalizado únicamente puede reabrirse con rol `owner`.
 - Identidad visual: usa su propio dashboard y navegación interna; la página pasa `chrome={false}` a `ModuleShell` para omitir el encabezado y contenedor visual estándar.
 
 ### Recordatorios
@@ -98,7 +99,8 @@ Archivos existentes, no ejecutados durante esta revisión:
 
 - `supabase/dinero_tanque.sql`: crea `tank_budgets` y `tank_expenses`.
 - `supabase/spotify_family.sql`: crea `spotify_family_members` y `spotify_family_payments`.
-- `supabase/pretty_salon.sql`: crea las cinco tablas `pretty_salon_*` indicadas arriba y la función de pertenencia al equipo.
+- `supabase/pretty_salon.sql`: crea las cinco tablas originales del salón y la función de pertenencia al equipo.
+- `supabase/pretty_salon_settlements.sql`: agrega el historial de cuadres quincenales, la función de rol propietario y sus políticas RLS; depende de haber ejecutado antes `pretty_salon.sql`.
 - `supabase/personal_loans.sql`: crea `personal_loans`.
 - `supabase/recordatorios_compras.sql`: crea y migra las ocho tablas `reminder_*` para tarjetas, cuentas bancarias, casos, responsables, compras con cuotas, distribuciones, aportes y abonos del dinero.
 
@@ -117,6 +119,7 @@ Los cinco archivos habilitan RLS y definen políticas para usuarios autenticados
 ## Pendientes operativos conocidos
 
 - Ejecutar `supabase/recordatorios_compras.sql` en Supabase antes de utilizar la vertiente `Compras con tarjeta de crédito`.
+- Ejecutar `supabase/pretty_salon_settlements.sql` antes de utilizar el cuadre quincenal y verificar que los integrantes tengan roles `owner` y `member` correctos.
 
 ## Guía de lectura selectiva
 

@@ -5,6 +5,7 @@ export type SectionId =
   | "caja"
   | "servicios"
   | "clientes"
+  | "cuadre"
   | "reportes";
 
 export type TransactionKind = "income" | "expense";

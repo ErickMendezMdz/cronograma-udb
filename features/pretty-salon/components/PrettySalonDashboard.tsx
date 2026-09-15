@@ -31,6 +31,7 @@ import { PrettyLoanMovementsList } from "@/features/pretty-salon/components/loan
 import { PrettyCashTransfersTable } from "@/features/pretty-salon/components/shared/PrettyCashTransfersTable";
 import { PrettyClientsTable } from "@/features/pretty-salon/components/shared/PrettyClientsTable";
 import { PrettyTransactionsList } from "@/features/pretty-salon/components/transactions/PrettyTransactionsList";
+import { PrettySettlementSection } from "@/features/pretty-salon/components/settlements/PrettySettlementSection";
 import { usePrettySalon } from "@/features/pretty-salon/hooks/usePrettySalon";
 import { formatMonth, money } from "@/features/pretty-salon/utils";
 
@@ -629,6 +630,20 @@ export function PrettySalonDashboard() {
               formatMonth={formatMonth}
             />
           ) : null}
+
+          {activeSection === "cuadre" && userId ? (
+            <PrettySettlementSection
+              supabase={supabase}
+              userId={userId}
+              email={email}
+              selectedMonth={selectedMonth}
+              paymentBreakdown={paymentBreakdown}
+              pendingCardTotal={totalPendingExpenses}
+              loanedBalance={loanedBalance}
+              onReload={loadSalonData}
+              onMonthChange={setSelectedMonth}
+            />
+          ) : null}
         </main>
       </div>
 
@@ -654,7 +669,7 @@ export function PrettySalonDashboard() {
       />
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#30333a] bg-[#15171a]/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
+        <div className="mx-auto grid max-w-lg grid-cols-5 gap-1.5">
           {mobileNavItems.map((item) => {
             const isActive = activeSection === item.id;
 

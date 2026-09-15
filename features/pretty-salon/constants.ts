@@ -7,6 +7,7 @@ export const sectionItems: Array<{ id: SectionId; label: string; detail: string 
   { id: "caja", label: "Caja", detail: "Cobros y saldos" },
   { id: "servicios", label: "Servicios", detail: "Precios y margen" },
   { id: "clientes", label: "Clientes", detail: "Historial y deuda" },
+  { id: "cuadre", label: "Cuadre", detail: "Cierre quincenal" },
   { id: "reportes", label: "Reportes", detail: "Meses cerrados" },
 ];
 
@@ -15,6 +16,7 @@ export const mobileNavItems: Array<{ id: SectionId; label: string }> = [
   { id: "ingresos", label: "Ingreso" },
   { id: "gastos", label: "Gasto" },
   { id: "caja", label: "Caja" },
+  { id: "cuadre", label: "Cuadre" },
 ];
 
 export const incomeCategories = [

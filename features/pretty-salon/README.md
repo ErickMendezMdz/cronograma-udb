@@ -20,6 +20,7 @@ Current phase: shared domain pieces, Supabase access, the main stateful orchestr
 - `components/loans/`: presentational loan movement lists, plus future loan forms and borrower views.
 - `components/reports/`: presentational daily trend, category breakdowns, payment method breakdowns, monthly report tables, and report summaries.
 - `components/team/`: future team/member access UI if needed.
+- `components/settlements/`, `hooks/usePrettySalonSettlement.ts`, `services/prettySalonSettlementService.ts`: asistente movil, historial y persistencia del cuadre quincenal.
 - `components/shared/`: local shared empty states, read-only tables, cards, section titles, dialogs, and table primitives specific to Pretty Salon.
 
 ## Future extraction order
