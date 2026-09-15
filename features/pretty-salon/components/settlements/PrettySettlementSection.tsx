@@ -27,6 +27,8 @@ const secondaryButton =
   "rounded-lg border border-[#454b55] px-4 py-3 text-sm font-semibold text-[#d8dde3] transition hover:border-[#70d6ff] disabled:cursor-not-allowed disabled:opacity-50";
 const primaryButton =
   "rounded-lg bg-[#00c2a8] px-4 py-3 text-sm font-semibold text-[#081210] transition hover:bg-[#27dcc4] disabled:cursor-not-allowed disabled:opacity-50";
+const dangerButton =
+  "rounded-lg border border-[#ff5f7e] px-4 py-3 text-sm font-semibold text-[#ff8aa1] transition hover:bg-[#321820] disabled:cursor-not-allowed disabled:opacity-50";
 
 function amount(value: string) {
   const parsed = Number(value);
@@ -122,6 +124,18 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
       setCorrectionAmount("");
       setCorrectionConcept("");
     }
+  }
+
+  async function confirmDeleteSettlement(item: NonNullable<typeof active>) {
+    const actionCount = item.draft.actions.length;
+    const detail = actionCount > 0
+      ? `Tambien se eliminaran ${actionCount} movimiento(s) creado(s) por este asistente y Caja volvera al estado anterior.`
+      : "Este cuadre todavia no ha creado movimientos financieros.";
+    const confirmed = window.confirm(
+      `¿Eliminar el cuadre de ${formatMonth(item.periodMonth)}?\n\n${detail}\n\nEsta accion no se puede deshacer.`
+    );
+    if (!confirmed) return;
+    await settlement.deleteSettlement(item);
   }
 
   if (settlement.loading) {
@@ -301,7 +315,20 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
             <article key={item.id} className="rounded-lg border border-[#30333a] bg-[#101113] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-[#f7f9fb]">{formatMonth(item.periodMonth)} · {item.periodHalf === 1 ? "Primera" : "Segunda"} quincena</p><p className="mt-1 text-xs text-[#aeb5bf]">Realizado {formatDate(item.performedOn)} por {item.performedBy}</p></div><span className="rounded-md bg-[#24352f] px-2 py-1 text-xs font-semibold text-[#71f2d8]">{item.status === "finalized" ? "Finalizado" : item.status === "reopened" ? "Reabierto" : "En proceso"}</span></div>
               <p className="mt-3 text-sm text-[#aeb5bf]">{item.draft.actions.length} acciones · Efectivo final {item.appCashFinal === null ? "pendiente" : money.format(item.appCashFinal)} · Banco final {item.appBankFinal === null ? "pendiente" : money.format(item.appBankFinal)}</p>
-              {item.status === "finalized" && settlement.teamRole === "owner" ? <button onClick={() => void settlement.reopenSettlement(item)} disabled={settlement.saving || Boolean(active)} className={`${secondaryButton} mt-3`}>Reabrir para corregir</button> : null}
+              {settlement.teamRole === "owner" ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {item.status === "finalized" ? (
+                    <button onClick={() => void settlement.reopenSettlement(item)} disabled={settlement.saving || Boolean(active)} className={secondaryButton}>Reabrir para corregir</button>
+                  ) : null}
+                  <button
+                    onClick={() => void confirmDeleteSettlement(item)}
+                    disabled={settlement.deletingSettlementId === item.id || settlement.saving}
+                    className={dangerButton}
+                  >
+                    {settlement.deletingSettlementId === item.id ? "Eliminando..." : "Eliminar cuadre y revertir movimientos"}
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

@@ -104,3 +104,12 @@ export async function reopenPrettySalonSettlement(
     draft: { ...settlement.draft, step: 5, realCashFinal: "", realBankFinal: "" },
   });
 }
+
+export async function deletePrettySalonSettlement(
+  supabase: SupabaseClient,
+  settlementId: string
+) {
+  return supabase.rpc("delete_pretty_salon_settlement", {
+    p_settlement_id: settlementId,
+  });
+}

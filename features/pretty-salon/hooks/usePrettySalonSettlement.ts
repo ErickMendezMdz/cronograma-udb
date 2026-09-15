@@ -10,6 +10,7 @@ import {
 } from "@/features/pretty-salon/services/prettySalonService";
 import {
   createPrettySalonSettlement,
+  deletePrettySalonSettlement,
   getPrettySalonSettlements,
   getPrettySalonTeamRole,
   reopenPrettySalonSettlement,
@@ -73,6 +74,7 @@ export function usePrettySalonSettlement({
   const [performedOn, setPerformedOn] = useState(todayForInput);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingSettlementId, setDeletingSettlementId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const cashBalance = balances.find((item) => item.method === "Efectivo")?.balance ?? 0;
@@ -187,7 +189,7 @@ export function usePrettySalonSettlement({
         paymentMethod: input.paymentMethod,
         status: input.status ?? "paid",
         contact: "",
-        notes: `${input.notes ? `${input.notes}\n` : ""}Registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}.`,
+        notes: `${input.notes ? `${input.notes}\n` : ""}Registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}. Cuadre ID: ${active.id}.`,
       })
     );
     setSaving(false);
@@ -217,7 +219,7 @@ export function usePrettySalonSettlement({
         fromMethod,
         toMethod,
         amount: roundMoney(amount),
-        notes: `Registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}.`,
+        notes: `Registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}. Cuadre ID: ${active.id}.`,
       })
     );
     setSaving(false);
@@ -253,7 +255,7 @@ export function usePrettySalonSettlement({
         borrower: "Esposa",
         paymentMethod,
         amount: roundMoney(amount),
-        notes: `Registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}.`,
+        notes: `Registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}. Cuadre ID: ${active.id}.`,
       })
     );
     setSaving(false);
@@ -330,7 +332,7 @@ export function usePrettySalonSettlement({
         date: active.accountingDate,
         amount,
         paymentMethod: active.draft.cardPaymentMethod,
-        notes: `Abono registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}.`,
+        notes: `Abono registrado desde cuadre ${active.periodMonth} Q${active.periodHalf}. Cuadre ID: ${active.id}.`,
       })
     );
     setSaving(false);
@@ -386,6 +388,26 @@ export function usePrettySalonSettlement({
     replaceSettlement(result.data);
   }
 
+  async function deleteSettlement(settlement: SalonSettlement) {
+    if (teamRole !== "owner") return false;
+    setDeletingSettlementId(settlement.id);
+    setError(null);
+    const result = await deletePrettySalonSettlement(supabase, settlement.id);
+    setDeletingSettlementId(null);
+    if (result.error) {
+      setError(errorMessage(result.error));
+      return false;
+    }
+
+    if (activeRef.current?.id === settlement.id) {
+      activeRef.current = null;
+      setActive(null);
+    }
+    setSettlements((current) => current.filter((item) => item.id !== settlement.id));
+    await onReload();
+    return true;
+  }
+
   return {
     settlements,
     active,
@@ -396,6 +418,7 @@ export function usePrettySalonSettlement({
     setPerformedOn,
     loading,
     saving,
+    deletingSettlementId,
     error,
     cashBalance,
     bankBalance,
@@ -411,5 +434,6 @@ export function usePrettySalonSettlement({
     registerCardPayment,
     finalizeSettlement,
     reopenSettlement,
+    deleteSettlement,
   };
 }

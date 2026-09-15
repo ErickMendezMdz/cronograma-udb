@@ -41,6 +41,64 @@ $$;
 
 grant execute on function public.is_pretty_salon_owner() to authenticated;
 
+-- Elimina un cuadre y revierte, dentro de la misma transaccion, solamente los
+-- movimientos marcados por su asistente para ese periodo.
+create or replace function public.delete_pretty_salon_settlement(
+  p_settlement_id uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_settlement public.pretty_salon_settlements%rowtype;
+  v_marker text;
+  v_deleted integer := 0;
+  v_rows integer := 0;
+begin
+  if not public.is_pretty_salon_owner() then
+    raise exception 'Solo el propietario puede eliminar un cuadre.';
+  end if;
+
+  select *
+    into v_settlement
+    from public.pretty_salon_settlements
+   where id = p_settlement_id
+   for update;
+
+  if not found then
+    raise exception 'El cuadre solicitado no existe.';
+  end if;
+
+  v_marker := format('%%Cuadre ID: %s.%%', v_settlement.id);
+
+  -- La marca tambien permite recuperar inserciones que alcanzaron Supabase pero
+  -- cuya referencia no pudo guardarse en el historial por una interrupcion de red.
+  delete from public.pretty_salon_transactions where notes like v_marker;
+  get diagnostics v_rows = row_count;
+  v_deleted := v_deleted + v_rows;
+
+  delete from public.pretty_salon_cash_transfers where notes like v_marker;
+  get diagnostics v_rows = row_count;
+  v_deleted := v_deleted + v_rows;
+
+  delete from public.pretty_salon_expense_payments where notes like v_marker;
+  get diagnostics v_rows = row_count;
+  v_deleted := v_deleted + v_rows;
+
+  delete from public.pretty_salon_loan_movements where notes like v_marker;
+  get diagnostics v_rows = row_count;
+  v_deleted := v_deleted + v_rows;
+
+  delete from public.pretty_salon_settlements where id = p_settlement_id;
+  return v_deleted;
+end;
+$$;
+
+revoke all on function public.delete_pretty_salon_settlement(uuid) from public;
+grant execute on function public.delete_pretty_salon_settlement(uuid) to authenticated;
+
 create or replace function public.protect_finalized_pretty_salon_settlement()
 returns trigger
 language plpgsql
