@@ -1021,6 +1021,23 @@ export function usePrettySalon() {
     }, 0);
   }, [loanMovements]);
 
+  const loanBalanceByMethod = useMemo(() => {
+    const balances: Record<"Efectivo" | "Cuenta Banco", number> = {
+      Efectivo: 0,
+      "Cuenta Banco": 0,
+    };
+
+    for (const item of loanMovements) {
+      const method = normalizeCashMethod(item.paymentMethod) as keyof typeof balances;
+      balances[method] += item.movementType === "borrow" ? item.amount : -item.amount;
+    }
+
+    return {
+      Efectivo: Math.max(Math.round(balances.Efectivo * 100) / 100, 0),
+      "Cuenta Banco": Math.max(Math.round(balances["Cuenta Banco"] * 100) / 100, 0),
+    };
+  }, [loanMovements]);
+
   const clientRows = useMemo(() => {
     const grouped = new Map<
       string,
@@ -1183,6 +1200,7 @@ export function usePrettySalon() {
     paymentBreakdown,
     cashTransferVolume,
     loanedBalance,
+    loanBalanceByMethod,
     clientRows,
     monthlyReports,
   };

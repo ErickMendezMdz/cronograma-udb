@@ -2,7 +2,7 @@ import type { SalonStatus } from "@/features/pretty-salon/types";
 
 export type SettlementHalf = 1 | 2;
 export type SettlementStatus = "in_progress" | "finalized" | "reopened";
-export type SettlementStep = 1 | 2 | 3 | 4 | 5;
+export type SettlementStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type SettlementActionKind =
   | "transfer"

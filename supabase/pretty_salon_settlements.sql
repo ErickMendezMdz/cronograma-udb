@@ -3,7 +3,7 @@
 create table if not exists public.pretty_salon_settlements (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users (id) on delete cascade,
-  period_month text not null check (period_month ~ '^\\d{4}-(0[1-9]|1[0-2])$'),
+  period_month text not null check (period_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
   period_half smallint not null check (period_half in (1, 2)),
   accounting_date date not null,
   performed_on date not null default current_date,
@@ -20,6 +20,14 @@ create table if not exists public.pretty_salon_settlements (
   updated_at timestamptz not null default now(),
   unique (period_month, period_half)
 );
+
+-- Corrige instalaciones que recibieron la expresion regular escapada como texto.
+alter table public.pretty_salon_settlements
+  drop constraint if exists pretty_salon_settlements_period_month_check;
+
+alter table public.pretty_salon_settlements
+  add constraint pretty_salon_settlements_period_month_check
+  check (period_month ~ '^[0-9]{4}-(0[1-9]|1[0-2])$');
 
 create index if not exists pretty_salon_settlements_period_idx
   on public.pretty_salon_settlements (period_month desc, period_half desc);
@@ -92,6 +100,10 @@ begin
   v_deleted := v_deleted + v_rows;
 
   delete from public.pretty_salon_settlements where id = p_settlement_id;
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'No se pudo eliminar el historial del cuadre.';
+  end if;
   return v_deleted;
 end;
 $$;
@@ -108,6 +120,9 @@ as $$
 begin
   if old.status = 'finalized' and not public.is_pretty_salon_owner() then
     raise exception 'Solo el propietario puede modificar o reabrir un cuadre finalizado.';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
   end if;
   return new;
 end;

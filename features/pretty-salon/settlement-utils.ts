@@ -41,6 +41,19 @@ export function defaultSettlementDraft(suggestions?: SalonSettlement | null): Se
   };
 }
 
+function hydrateSettlementDraft(draft: SettlementDraft): SettlementDraft {
+  return {
+    ...defaultSettlementDraft(),
+    ...draft,
+    step: draft.step >= 1 && draft.step <= 6 ? draft.step : 1,
+    fixedPayments: settlementFixedPayments().map((item) => {
+      const saved = draft.fixedPayments?.find((candidate) => candidate.key === item.key);
+      return saved ? { ...item, ...saved } : item;
+    }),
+    actions: Array.isArray(draft.actions) ? draft.actions : [],
+  };
+}
+
 export function normalizeSettlement(row: SalonSettlementRow): SalonSettlement {
   return {
     id: row.id,
@@ -55,7 +68,7 @@ export function normalizeSettlement(row: SalonSettlementRow): SalonSettlement {
     appBankInitial: Number(row.app_bank_initial),
     appCashFinal: row.app_cash_final === null ? null : Number(row.app_cash_final),
     appBankFinal: row.app_bank_final === null ? null : Number(row.app_bank_final),
-    draft: row.draft,
+    draft: hydrateSettlementDraft(row.draft),
     finalizedAt: row.finalized_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

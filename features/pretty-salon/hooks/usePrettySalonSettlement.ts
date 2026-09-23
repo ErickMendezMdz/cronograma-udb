@@ -48,7 +48,7 @@ type UsePrettySalonSettlementOptions = {
   selectedMonth: string;
   balances: BalanceItem[];
   pendingCardTotal: number;
-  loanedBalance: number;
+  loanBalanceByMethod: Record<"Efectivo" | "Cuenta Banco", number>;
   onReload: () => Promise<boolean>;
 };
 
@@ -63,7 +63,7 @@ export function usePrettySalonSettlement({
   selectedMonth,
   balances,
   pendingCardTotal,
-  loanedBalance,
+  loanBalanceByMethod,
   onReload,
 }: UsePrettySalonSettlementOptions) {
   const [settlements, setSettlements] = useState<SalonSettlement[]>([]);
@@ -279,9 +279,23 @@ export function usePrettySalonSettlement({
     if (!active || !validMoney(active.draft.salaryAmount) || !validMoney(active.draft.salaryAdvance)) return false;
     const salary = roundMoney(Number(active.draft.salaryAmount));
     const advance = roundMoney(Number(active.draft.salaryAdvance));
-    if (salary <= 0 || advance > salary || advance > loanedBalance + 0.001) return false;
+    const method = active.draft.salaryPaymentMethod as "Efectivo" | "Cuenta Banco";
+    const availableLoan = loanBalanceByMethod[method] ?? 0;
+    const availableCash = method === "Efectivo" ? cashBalance : bankBalance;
+    const physicalPayment = roundMoney(salary - advance);
+    if (salary <= 0 || advance > salary || advance > availableLoan + 0.001) {
+      setError(`El adelanto no puede superar lo prestado desde ${method}.`);
+      return false;
+    }
+    if (physicalPayment > availableCash + 0.001) {
+      setError(`No hay suficiente saldo en ${method}. Disponible: ${availableCash.toFixed(2)}.`);
+      return false;
+    }
 
-    if (advance > 0) {
+    const advanceAlreadyRegistered = active.draft.actions.some(
+      (item) => item.kind === "salary_advance_repay"
+    );
+    if (advance > 0 && !advanceAlreadyRegistered) {
       const repaid = await addLoanMovement("repay", advance, active.draft.salaryPaymentMethod, "salary_advance_repay");
       if (!repaid) return false;
     }
@@ -303,12 +317,18 @@ export function usePrettySalonSettlement({
     const monthly = Number(item.monthlyAmount);
     const months = Number(item.months);
     if (!Number.isFinite(monthly) || monthly <= 0 || !Number.isInteger(months) || months <= 0) return false;
+    const paymentAmount = roundMoney(monthly * months);
+    const available = item.paymentMethod === "Efectivo" ? cashBalance : bankBalance;
+    if (paymentAmount > available + 0.001) {
+      setError(`No hay suficiente saldo en ${item.paymentMethod}. Disponible: ${available.toFixed(2)}.`);
+      return false;
+    }
     const ok = await addTransaction({
       kind: "expense",
       actionKind: "fixed_expense",
       concept: `${item.label} (${months} mes${months === 1 ? "" : "es"})`,
       category: item.key === "alcaldia" ? "Alcaldia" : item.key === "luz" ? "Servicios basicos" : "Marketing",
-      amount: monthly * months,
+      amount: paymentAmount,
       paymentMethod: item.paymentMethod,
     });
     if (!ok) return false;
@@ -325,6 +345,11 @@ export function usePrettySalonSettlement({
     if (!active) return false;
     const amount = roundMoney(Number(active.draft.cardPaymentAmount));
     if (!Number.isFinite(amount) || amount <= 0 || amount > pendingCardTotal + 0.001) return false;
+    const available = active.draft.cardPaymentMethod === "Efectivo" ? cashBalance : bankBalance;
+    if (amount > available + 0.001) {
+      setError(`No hay suficiente saldo en ${active.draft.cardPaymentMethod}. Disponible: ${available.toFixed(2)}.`);
+      return false;
+    }
     setSaving(true);
     const result = await createPrettySalonExpensePayment(
       supabase,
@@ -362,7 +387,7 @@ export function usePrettySalonSettlement({
       status: "finalized",
       app_cash_final: roundMoney(cashBalance),
       app_bank_final: roundMoney(bankBalance),
-      draft: { ...active.draft, step: 5 },
+      draft: { ...active.draft, step: 6 },
       finalized_at: new Date().toISOString(),
     });
     setSaving(false);

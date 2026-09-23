@@ -101,7 +101,7 @@ export async function reopenPrettySalonSettlement(
   return updatePrettySalonSettlement(supabase, settlement.id, {
     status: "reopened",
     finalized_at: null,
-    draft: { ...settlement.draft, step: 5, realCashFinal: "", realBankFinal: "" },
+    draft: { ...settlement.draft, step: 6, realCashFinal: "", realBankFinal: "" },
   });
 }
 
