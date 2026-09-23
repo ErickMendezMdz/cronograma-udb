@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient, getSupabaseConfigError } from "@/lib/supabaseClient";
 import { collectionPaymentMethods, serviceCatalog } from "@/features/pretty-salon/constants";
+import { getSettlementReview } from "@/features/pretty-salon/settlement-utils";
 import {
   collectPrettySalonPendingIncome,
   countPrettySalonTransactions,
@@ -411,6 +412,11 @@ export function usePrettySalon() {
       return;
     }
 
+    const reviewContext = getSettlementReview(userId);
+    const reviewMarker = reviewContext && form.date.startsWith(reviewContext.periodMonth)
+      ? `Registrado durante revision del cuadre ${reviewContext.periodMonth} Q${reviewContext.periodHalf}. Cuadre ID: ${reviewContext.settlementId}.`
+      : "";
+    const notes = form.notes.trim();
     const next: Omit<SalonTransaction, "id"> = {
       kind,
       date: form.date || todayISO(),
@@ -420,7 +426,7 @@ export function usePrettySalon() {
       paymentMethod: form.paymentMethod,
       status: resolveStatusForPayment(form.paymentMethod, form.status),
       contact: form.contact.trim(),
-      notes: form.notes.trim(),
+      notes: reviewMarker ? `${notes ? `${notes}\n` : ""}${reviewMarker}` : notes,
     };
 
     setSavingKind(kind);

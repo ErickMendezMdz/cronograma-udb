@@ -5,6 +5,7 @@ export type SettlementStatus = "in_progress" | "finalized" | "reopened";
 export type SettlementStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type SettlementActionKind =
+  | "physical_transfer"
   | "transfer"
   | "adjustment_income"
   | "adjustment_expense"

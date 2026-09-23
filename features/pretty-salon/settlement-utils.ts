@@ -21,13 +21,18 @@ export function accountingDateFor(month: string, half: SettlementHalf) {
 
 export function defaultSettlementDraft(suggestions?: SalonSettlement | null): SettlementDraft {
   const prior = suggestions?.draft;
+  const priorSalary = prior?.salaryAmount || String(
+    prior?.actions
+      .filter((item) => item.kind === "salary_expense")
+      .reduce((total, item) => total + item.amount, 0) || ""
+  );
   return {
     step: 1,
     realCashInitial: "",
     realBankInitial: "",
     realCashFinal: "",
     realBankFinal: "",
-    salaryAmount: prior?.salaryAmount ?? "",
+    salaryAmount: priorSalary,
     salaryAdvance: "",
     salaryPaymentMethod: prior?.salaryPaymentMethod ?? "Efectivo",
     fixedPayments: settlementFixedPayments().map((item) => {
@@ -86,4 +91,54 @@ export function validMoney(value: string) {
 
 export function todayForInput() {
   return todayISO();
+}
+
+type SettlementReviewContext = {
+  settlementId: string;
+  periodMonth: string;
+  periodHalf: SettlementHalf;
+  expiresAt: number;
+};
+
+function reviewStorageKey(userId: string) {
+  return `pretty-salon-settlement-review:${userId}`;
+}
+
+export function beginSettlementReview(
+  userId: string,
+  settlement: Pick<SalonSettlement, "id" | "periodMonth" | "periodHalf">
+) {
+  const context: SettlementReviewContext = {
+    settlementId: settlement.id,
+    periodMonth: settlement.periodMonth,
+    periodHalf: settlement.periodHalf,
+    expiresAt: Date.now() + 4 * 60 * 60 * 1000,
+  };
+  localStorage.setItem(reviewStorageKey(userId), JSON.stringify(context));
+}
+
+export function getSettlementReview(userId: string): SettlementReviewContext | null {
+  const raw = localStorage.getItem(reviewStorageKey(userId));
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<SettlementReviewContext>;
+    if (
+      typeof value.settlementId !== "string" ||
+      typeof value.periodMonth !== "string" ||
+      (value.periodHalf !== 1 && value.periodHalf !== 2) ||
+      typeof value.expiresAt !== "number" ||
+      value.expiresAt < Date.now()
+    ) {
+      localStorage.removeItem(reviewStorageKey(userId));
+      return null;
+    }
+    return value as SettlementReviewContext;
+  } catch {
+    localStorage.removeItem(reviewStorageKey(userId));
+    return null;
+  }
+}
+
+export function clearSettlementReview(userId: string) {
+  localStorage.removeItem(reviewStorageKey(userId));
 }

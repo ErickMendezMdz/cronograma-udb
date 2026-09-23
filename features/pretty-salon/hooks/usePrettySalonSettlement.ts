@@ -77,8 +77,8 @@ export function usePrettySalonSettlement({
   const [deletingSettlementId, setDeletingSettlementId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const cashBalance = balances.find((item) => item.method === "Efectivo")?.balance ?? 0;
-  const bankBalance = balances.find((item) => item.method === "Cuenta Banco")?.balance ?? 0;
+  const cashBalance = roundMoney(balances.find((item) => item.method === "Efectivo")?.balance ?? 0);
+  const bankBalance = roundMoney(balances.find((item) => item.method === "Cuenta Banco")?.balance ?? 0);
 
   const loadSettlements = useCallback(async () => {
     setLoading(true);
@@ -173,6 +173,33 @@ export function usePrettySalonSettlement({
       createdAt: new Date().toISOString(),
     };
     return persistDraft({ ...current.draft, actions: [...current.draft.actions, nextAction] });
+  }
+
+  async function recordPhysicalTransfer(
+    fromMethod: string,
+    toMethod: string,
+    amount: number,
+    realCashInitial: string,
+    realBankInitial: string
+  ) {
+    const current = activeRef.current;
+    if (!current) return false;
+    const action: SettlementAction = {
+      id: crypto.randomUUID(),
+      kind: "physical_transfer",
+      label: `Traslado fisico de ${fromMethod} a ${toMethod}`,
+      amount: roundMoney(amount),
+      paymentMethod: fromMethod,
+      financialRecordId: "",
+      financialTable: "",
+      createdAt: new Date().toISOString(),
+    };
+    return persistDraft({
+      ...current.draft,
+      realCashInitial,
+      realBankInitial,
+      actions: [...current.draft.actions, action],
+    });
   }
 
   async function addTransaction(input: SettlementTransactionInput) {
@@ -292,15 +319,12 @@ export function usePrettySalonSettlement({
       return false;
     }
 
-    const advanceAlreadyRegistered = active.draft.actions.some(
-      (item) => item.kind === "salary_advance_repay"
-    );
-    if (advance > 0 && !advanceAlreadyRegistered) {
+    if (advance > 0) {
       const repaid = await addLoanMovement("repay", advance, active.draft.salaryPaymentMethod, "salary_advance_repay");
       if (!repaid) return false;
     }
 
-    return addTransaction({
+    const registered = await addTransaction({
       kind: "expense",
       actionKind: "salary_expense",
       concept: "Salario quincenal",
@@ -309,6 +333,12 @@ export function usePrettySalonSettlement({
       paymentMethod: active.draft.salaryPaymentMethod,
       notes: advance > 0 ? `Incluye ${advance.toFixed(2)} descontados como adelanto salarial.` : "",
     });
+    if (!registered) return false;
+    const current = activeRef.current;
+    if (current) {
+      await persistDraft({ ...current.draft, salaryAmount: "", salaryAdvance: "" });
+    }
+    return true;
   }
 
   async function registerFixedPayment(index: number) {
@@ -453,6 +483,7 @@ export function usePrettySalonSettlement({
     goToStep,
     addTransaction,
     addTransfer,
+    recordPhysicalTransfer,
     addLoanMovement,
     registerSalary,
     registerFixedPayment,

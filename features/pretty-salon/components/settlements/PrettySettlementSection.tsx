@@ -5,7 +5,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { usePrettySalonSettlement } from "@/features/pretty-salon/hooks/usePrettySalonSettlement";
 import type { SettlementActionKind } from "@/features/pretty-salon/settlement-types";
 import type { SectionId } from "@/features/pretty-salon/types";
-import { accountingDateFor, roundMoney } from "@/features/pretty-salon/settlement-utils";
+import {
+  accountingDateFor,
+  beginSettlementReview,
+  clearSettlementReview,
+  roundMoney,
+} from "@/features/pretty-salon/settlement-utils";
 import { formatDate, formatMonth, money } from "@/features/pretty-salon/utils";
 
 type PrettySettlementSectionProps = {
@@ -93,6 +98,9 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
       props.onMonthChange(active.periodMonth);
     }
   }, [active, props]);
+  useEffect(() => {
+    clearSettlementReview(props.userId);
+  }, [props.userId]);
   const initialCashDiff = draft?.realCashInitial === "" ? null : roundMoney(Number(draft?.realCashInitial) - settlement.cashBalance);
   const initialBankDiff = draft?.realBankInitial === "" ? null : roundMoney(Number(draft?.realBankInitial) - settlement.bankBalance);
   const initialBalanced = initialCashDiff !== null && initialBankDiff !== null && Math.abs(initialCashDiff) <= 0.01 && Math.abs(initialBankDiff) <= 0.01;
@@ -144,24 +152,30 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
     if (!draft || transferableAmount <= 0) return;
     const cash = Number(draft.realCashInitial);
     const bank = Number(draft.realBankInitial);
-    const nextDraft = {
-      ...draft,
-      realCashInitial: roundMoney(cash + (physicalTransferFrom === "Efectivo" ? -transferableAmount : transferableAmount)).toFixed(2),
-      realBankInitial: roundMoney(bank + (physicalTransferFrom === "Cuenta Banco" ? -transferableAmount : transferableAmount)).toFixed(2),
-    };
-    await settlement.persistDraft(nextDraft);
+    const nextCash = roundMoney(cash + (physicalTransferFrom === "Efectivo" ? -transferableAmount : transferableAmount)).toFixed(2);
+    const nextBank = roundMoney(bank + (physicalTransferFrom === "Cuenta Banco" ? -transferableAmount : transferableAmount)).toFixed(2);
+    await settlement.recordPhysicalTransfer(
+      physicalTransferFrom,
+      physicalTransferTo,
+      transferableAmount,
+      nextCash,
+      nextBank
+    );
   }
 
   async function reviewMovements(section: "ingresos" | "gastos") {
     if (!draft) return;
     const saved = await settlement.persistDraft({ ...draft, step: 2 });
-    if (saved) props.onNavigate(section);
+    if (saved && active) {
+      beginSettlementReview(props.userId, active);
+      props.onNavigate(section);
+    }
   }
 
   async function confirmDeleteSettlement(item: NonNullable<typeof active>) {
     const actionCount = item.draft.actions.length;
     const detail = actionCount > 0
-      ? `Tambien se eliminaran ${actionCount} movimiento(s) creado(s) por este asistente y Caja volvera al estado anterior.`
+      ? `Tambien se revertiran los movimientos creados por el asistente o durante su revision de ingresos y gastos. El historial contiene ${actionCount} accion(es).`
       : "Este cuadre todavia no ha creado movimientos financieros.";
     const confirmed = window.confirm(
       `¿Eliminar el cuadre de ${formatMonth(item.periodMonth)}?\n\n${detail}\n\nEsta accion no se puede deshacer.`
@@ -332,7 +346,18 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
                 <div className="rounded-lg bg-[#101113] p-4"><p className="text-sm text-[#aeb5bf]">Entregar físicamente</p><p className="mt-1 text-2xl font-semibold text-[#71f2d8]">{money.format(Math.max(amount(draft.salaryAmount) - amount(draft.salaryAdvance), 0))}</p></div>
               </div>
               <p className="mt-4 text-xs leading-5 text-[#aeb5bf]">El adelanto se cambiará automáticamente de prestado a repuesto en el mismo medio. Solo saldrá físicamente la diferencia del salario.</p>
-              <button onClick={() => void settlement.registerSalary()} disabled={settlement.saving || amount(draft.salaryAmount) <= 0 || amount(draft.salaryAdvance) > (props.loanBalanceByMethod[draft.salaryPaymentMethod as "Efectivo" | "Cuenta Banco"] ?? 0) || amount(draft.salaryAmount) - amount(draft.salaryAdvance) > (draft.salaryPaymentMethod === "Efectivo" ? settlement.cashBalance : settlement.bankBalance) || draft.actions.some((item) => item.kind === "salary_expense")} className={`${primaryButton} mt-4 w-full`}>{draft.actions.some((item) => item.kind === "salary_expense") ? "Salario registrado" : "Registrar salario"}</button>
+              <button onClick={() => void settlement.registerSalary()} disabled={settlement.saving || amount(draft.salaryAmount) <= 0 || amount(draft.salaryAdvance) > (props.loanBalanceByMethod[draft.salaryPaymentMethod as "Efectivo" | "Cuenta Banco"] ?? 0) || amount(draft.salaryAmount) - amount(draft.salaryAdvance) > (draft.salaryPaymentMethod === "Efectivo" ? settlement.cashBalance : settlement.bankBalance)} className={`${primaryButton} mt-4 w-full`}>Registrar pago de salario</button>
+              {draft.actions.some((item) => item.kind === "salary_expense") ? (
+                <div className="mt-4 rounded-lg border border-[#30333a] bg-[#101113] p-4">
+                  <p className="text-sm font-semibold text-[#f7f9fb]">Pagos registrados</p>
+                  <div className="mt-2 space-y-2">
+                    {draft.actions.filter((item) => item.kind === "salary_expense").map((item) => (
+                      <div key={item.id} className="flex justify-between gap-3 text-sm"><span className="text-[#aeb5bf]">{item.paymentMethod}</span><span className="font-semibold text-[#71f2d8]">{money.format(item.amount)}</span></div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-[#aeb5bf]">Puedes registrar otro pago cambiando el monto o el medio.</p>
+                </div>
+              ) : null}
               <div className="mt-5 flex justify-between gap-3"><button onClick={() => void settlement.goToStep(3)} className={secondaryButton}>Atrás</button><button onClick={() => void settlement.goToStep(5)} disabled={!draft.actions.some((item) => item.kind === "salary_expense")} className={primaryButton}>Continuar</button></div>
             </div>
           ) : null}
