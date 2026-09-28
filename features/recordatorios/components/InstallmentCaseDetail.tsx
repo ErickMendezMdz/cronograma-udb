@@ -23,11 +23,65 @@ type Props = {
 const inputClass = "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-slate-100 outline-none focus:border-emerald-400 sm:text-sm";
 type PaymentForm = { participantId: string; amount: string; paidAt: string; method: string; route: "account" | "direct_card"; accountId: string; cardId: string; notes: string };
 const emptyPayment = (today: string): PaymentForm => ({ participantId: "", amount: "", paidAt: today, method: "Transferencia", route: "account", accountId: "", cardId: "", notes: "" });
+type InstallmentProgress = InstallmentRow & { collected: number; collectedByParticipant: Record<string, number>; paidToCard: number };
+
+const toCents = (amount: number) => Math.round(amount * 100);
 
 function MonthlySummary({ rows, cards }: { rows: Array<InstallmentRow & { collected: number; paidToCard: number }>; cards: CreditCard[] }) {
   const grouped = new Map<string, { month: string; cardId: string | null; total: number; collected: number; paid: number }>();
   rows.forEach((row) => { const key = `${row.dueDate.slice(0, 7)}-${row.cardId ?? "none"}`; const value = grouped.get(key) ?? { month: `${row.dueDate.slice(0, 7)}-01`, cardId: row.cardId, total: 0, collected: 0, paid: 0 }; value.total += row.total; value.collected += row.collected; value.paid += row.paidToCard; grouped.set(key, value); });
   return <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{[...grouped.values()].sort((a, b) => a.month.localeCompare(b.month)).map((item) => <article key={`${item.month}-${item.cardId}`} className="rounded-xl bg-slate-950/60 p-3"><p className="text-xs text-slate-500">{formatDate(item.month)} · {cards.find((card) => card.id === item.cardId)?.name ?? "Sin tarjeta"}</p><p className="mt-1 text-lg font-semibold text-slate-100">Cuota combinada {formatMoney(item.total)}</p><p className="mt-1 text-xs text-slate-400">Recibido {formatMoney(item.collected)} · A TC {formatMoney(item.paid)}</p></article>)}</div>;
+}
+
+function InstallmentCalendar({ rows, sharedCase }: { rows: InstallmentProgress[]; sharedCase: SharedCase }) {
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[820px] text-left text-sm">
+        <thead className="text-slate-500">
+          <tr>
+            <th className="p-2">Vencimiento</th>
+            <th className="p-2">Compra</th>
+            <th className="p-2">Cuota</th>
+            {sharedCase.participants.map((person) => <th key={person.id} className="p-2">{person.name}</th>)}
+            <th className="p-2">Recibido</th>
+            <th className="p-2">A TC</th>
+            <th className="p-2">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const pending = sharedCase.participants.filter((person) =>
+              toCents(row.participantAmounts[person.id] ?? 0) > toCents(row.collectedByParticipant[person.id] ?? 0)
+            );
+            return (
+              <tr key={`${row.purchaseId}-${row.number}`} className="border-t border-slate-800">
+                <td className="p-2">{formatDate(row.dueDate)}</td>
+                <td className="p-2 text-slate-300">{row.purchaseDescription}</td>
+                <td className="p-2">{row.number}/{sharedCase.purchases.find((purchase) => purchase.id === row.purchaseId)?.installmentCount}</td>
+                {sharedCase.participants.map((person) => {
+                  const due = row.participantAmounts[person.id] ?? 0;
+                  const paid = row.collectedByParticipant[person.id] ?? 0;
+                  const dueCents = toCents(due);
+                  const paidCents = toCents(paid);
+                  return (
+                    <td key={person.id} className="p-2">
+                      {dueCents === 0 ? <span className="text-slate-500">—</span> :
+                        paidCents >= dueCents ? <span className="font-medium text-emerald-300">Pagó {formatMoney(due)}</span> :
+                          paidCents === 0 ? <span className="font-medium text-amber-200">Pendiente {formatMoney(due)}</span> :
+                            <span className="font-medium text-amber-200">Abonó {formatMoney(paid)} · falta {formatMoney((dueCents - paidCents) / 100)}</span>}
+                    </td>
+                  );
+                })}
+                <td className={`p-2 ${pending.length === 0 ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.collected)}</td>
+                <td className={`p-2 ${toCents(row.paidToCard) >= toCents(row.total) ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.paidToCard)}</td>
+                <td className={`p-2 font-medium ${pending.length === 0 ? "text-emerald-300" : "text-amber-200"}`}>{pending.length === 0 ? "Completo" : `Falta: ${pending.map((person) => person.name).join(", ")}`}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function InstallmentCaseDetail(props: Props) {
@@ -41,11 +95,18 @@ export function InstallmentCaseDetail(props: Props) {
     const cardPaid: Record<string, number> = {};
     sharedCase.allocations.forEach((item) => { if (item.cardId) cardPaid[item.cardId] = (cardPaid[item.cardId] ?? 0) + item.amount; });
     return installments.map((row) => {
-      const collected = sharedCase.participants.reduce((sum, person) => { const due = row.participantAmounts[person.id] ?? 0; const applied = Math.min(received[person.id] ?? 0, due); received[person.id] = Math.max(0, (received[person.id] ?? 0) - applied); return sum + applied; }, 0);
+      const collectedByParticipant: Record<string, number> = {};
+      const collected = sharedCase.participants.reduce((sum, person) => {
+        const due = row.participantAmounts[person.id] ?? 0;
+        const applied = Math.min(received[person.id] ?? 0, due);
+        received[person.id] = Math.max(0, (received[person.id] ?? 0) - applied);
+        collectedByParticipant[person.id] = applied;
+        return sum + applied;
+      }, 0);
       const cardKey = row.cardId ?? "";
       const paidToCard = Math.min(cardPaid[cardKey] ?? 0, row.total);
       cardPaid[cardKey] = Math.max(0, (cardPaid[cardKey] ?? 0) - paidToCard);
-      return { ...row, collected, paidToCard };
+      return { ...row, collected, collectedByParticipant, paidToCard };
     });
   }, [installments, sharedCase.allocations, sharedCase.participants, sharedCase.payments]);
   const [panel, setPanel] = useState<"none" | "purchase" | "payment" | "allocation">("none");
@@ -111,7 +172,12 @@ export function InstallmentCaseDetail(props: Props) {
 
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70"><div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Responsables y saldos</h2></div>{balances.map((item) => <article key={item.id} className="grid gap-3 border-b border-slate-800 p-4 md:grid-cols-[1fr_repeat(3,120px)] md:items-center"><div>{editingPerson === item.id ? <div className="flex gap-2"><input className="rounded-xl bg-slate-950 px-3 py-2" value={personName} onChange={(e) => setPersonName(e.target.value)} /><Button onClick={async () => { if (await props.onUpdateParticipantName(item.id, personName)) setEditingPerson(null); }}>Guardar</Button></div> : <><p className="font-semibold text-slate-100">{item.name}</p><div className="mt-2 flex gap-2"><Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => { setEditingPerson(item.id); setPersonName(item.name); }}>Editar</Button>{sharedCase.participants.length > 1 ? <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => window.confirm("¿Eliminar a esta persona y sus aportes? Revisa después la distribución de cada compra.") && props.onDeleteParticipant(item.id)}>Eliminar</Button> : null}</div></>}</div><div><p className="text-xs text-slate-500">Asignado</p>{formatMoney(item.assigned)}</div><div><p className="text-xs text-slate-500">Recibido</p>{formatMoney(item.paid)}</div><div><p className="text-xs text-slate-500">Pendiente</p><span className="text-amber-200">{formatMoney(item.pending)}</span></div></article>)}</section>
 
-    <section className="mt-6 rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Calendario acumulado de cuotas</h2><p className="mt-1 text-sm text-slate-400">Los aportes y abonos se aplican primero a las cuotas más antiguas. Una compra nueva se suma desde su propio mes inicial.</p><MonthlySummary rows={installmentProgress} cards={cards} /><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="text-slate-500"><tr><th className="p-2">Vencimiento</th><th className="p-2">Compra</th><th className="p-2">Cuota</th>{sharedCase.participants.map((p) => <th key={p.id} className="p-2">{p.name}</th>)}<th className="p-2">Recibido</th><th className="p-2">A TC</th><th className="p-2 text-right">Total</th></tr></thead><tbody>{installmentProgress.map((row) => <tr key={`${row.purchaseId}-${row.number}`} className="border-t border-slate-800"><td className="p-2">{formatDate(row.dueDate)}</td><td className="p-2 text-slate-300">{row.purchaseDescription}</td><td className="p-2">{row.number}/{sharedCase.purchases.find((p) => p.id === row.purchaseId)?.installmentCount}</td>{sharedCase.participants.map((p) => <td key={p.id} className="p-2">{formatMoney(row.participantAmounts[p.id] ?? 0)}</td>)}<td className={`p-2 ${row.collected + 0.005 >= row.total ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.collected)}</td><td className={`p-2 ${row.paidToCard + 0.005 >= row.total ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.paidToCard)}</td><td className="p-2 text-right font-semibold">{formatMoney(row.total)}</td></tr>)}</tbody></table></div></section>
+    <section className="mt-6 rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+      <h2 className="font-semibold text-slate-100">Calendario acumulado de cuotas</h2>
+      <p className="mt-1 text-sm text-slate-400">Los aportes y abonos se aplican primero a las cuotas más antiguas. Una compra nueva se suma desde su propio mes inicial.</p>
+      <MonthlySummary rows={installmentProgress} cards={cards} />
+      <InstallmentCalendar rows={installmentProgress} sharedCase={sharedCase} />
+    </section>
 
     <section className="mt-6 grid gap-4 xl:grid-cols-3">
       <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 className="font-semibold text-slate-100">Compras</h2><div className="mt-3 space-y-3">{sharedCase.purchases.map((item) => <article key={item.id} className="rounded-xl bg-slate-950/60 p-3"><div className="flex justify-between"><div><p className="text-slate-100">{item.description}</p><p className="text-xs text-slate-500">{item.installmentCount} cuotas desde {formatDate(item.firstInstallmentDate)}</p></div><b>{formatMoney(item.amount)}</b></div><div className="mt-3 flex gap-2"><Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => { setEditingPurchase(item.id); setPurchase({ description: item.description, purchaseDate: item.purchaseDate, amount: String(item.amount), cardId: item.cardId ?? "", installmentCount: item.installmentCount, firstInstallmentDate: item.firstInstallmentDate, participantAmounts: Object.fromEntries(item.shares.map((share) => [share.participantId, String(share.amount)])) }); setPanel("purchase"); }}>Editar</Button><Button variant="danger" className="px-2 py-1 text-xs" onClick={() => window.confirm("¿Eliminar esta compra y todo su calendario de cuotas?") && props.onDeletePurchase(item.id)}>Eliminar</Button></div></article>)}</div></div>
