@@ -92,8 +92,14 @@ export function InstallmentCaseDetail(props: Props) {
   const installments = useMemo(() => getInstallments(sharedCase), [sharedCase]);
   const installmentProgress = useMemo(() => {
     const received = Object.fromEntries(sharedCase.participants.map((person) => [person.id, sharedCase.payments.filter((item) => item.participantId === person.id).reduce((sum, item) => sum + item.amount, 0)]));
-    const cardPaid: Record<string, number> = {};
-    sharedCase.allocations.forEach((item) => { if (item.cardId) cardPaid[item.cardId] = (cardPaid[item.cardId] ?? 0) + item.amount; });
+    const paymentParticipants = new Map(sharedCase.payments.map((payment) => [payment.id, payment.participantId]));
+    const cardPaid: Record<string, Record<string, number>> = {};
+    sharedCase.allocations.forEach((item) => {
+      const participantId = paymentParticipants.get(item.paymentId);
+      if (item.destinationType !== "card" || !item.cardId || !participantId) return;
+      cardPaid[item.cardId] ??= {};
+      cardPaid[item.cardId][participantId] = (cardPaid[item.cardId][participantId] ?? 0) + toCents(item.amount);
+    });
     return installments.map((row) => {
       const collectedByParticipant: Record<string, number> = {};
       const collected = sharedCase.participants.reduce((sum, person) => {
@@ -103,9 +109,14 @@ export function InstallmentCaseDetail(props: Props) {
         collectedByParticipant[person.id] = applied;
         return sum + applied;
       }, 0);
-      const cardKey = row.cardId ?? "";
-      const paidToCard = Math.min(cardPaid[cardKey] ?? 0, row.total);
-      cardPaid[cardKey] = Math.max(0, (cardPaid[cardKey] ?? 0) - paidToCard);
+      const cardBalance = cardPaid[row.cardId ?? ""];
+      const appliedToCard = sharedCase.participants.reduce((sum, person) => {
+        const available = cardBalance?.[person.id] ?? 0;
+        const applied = Math.min(available, toCents(row.participantAmounts[person.id] ?? 0));
+        if (cardBalance) cardBalance[person.id] = available - applied;
+        return sum + applied;
+      }, 0);
+      const paidToCard = Math.min(appliedToCard, toCents(row.total)) / 100;
       return { ...row, collected, collectedByParticipant, paidToCard };
     });
   }, [installments, sharedCase.allocations, sharedCase.participants, sharedCase.payments]);
