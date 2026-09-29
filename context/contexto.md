@@ -18,6 +18,10 @@ Fotografía comprobada contra el repositorio. El código vigente prevalece si es
 
 El proyecto debe seguir siendo compatible con Supabase Free y Vercel Hobby/Free. Se prefieren soluciones ligeras y no se deben asumir recursos de pago ni añadir servicios de plataforma innecesarios.
 
+Cuando se soliciten comandos para publicar cambios en Vercel, entregarlos en un único bloque de tres líneas, listo para copiar: `git add` con rutas acotadas, `git commit -m` siguiendo el estilo existente y `git push origin main`.
+
+En este entorno WSL2, el sandbox de Codex puede fallar tras reiniciar por el montaje `/mnt/wslg/distro`. `bubblewrap` ya está instalado; desmontar temporalmente solo esa ruta permitió volver a usar el sandbox. El montaje reaparece al reiniciar WSL: comprobarlo y pedir autorización antes de repetir la operación, sin desmontar otras rutas ni desactivar el sandbox.
+
 ## Arquitectura actual
 
 - `app/` define el layout y las rutas. Las cinco páginas de módulo son capas delgadas que montan `ModuleShell` y el dashboard del dominio.
@@ -75,7 +79,7 @@ Además de los módulos, `/` redirige a `/login`; `/login` autentica con correo/
 - En tasa cero los aportes se aplican primero a las cuotas más antiguas. Pueden recibirse en una cuenta bancaria propia, quedando pendientes de abonar, o pagarse directamente a la tarjeta; el pago directo registra simultáneamente el aporte y su abono a la TC.
 - Registra, edita y elimina tarjetas y cuentas bancarias. Las cuentas conservan nombre, banco y tipo; no intentan representar el saldo bancario real. Compras, casos, responsables, aportes y abonos también ofrecen edición o eliminación con confirmaciones y recálculo derivado.
 - La vista para captura del flujo compartido mantiene su resumen grupal y destaque opcional; la de tasa cero conserva únicamente responsables y saldos. Ambas ocultan cuentas y movimientos privados.
-- El calendario de tasa cero muestra cada cuota, montos por responsable, lo recibido y lo abonado a la tarjeta. Los resúmenes mensuales muestran la cuota combinada cuando coinciden varias compras.
+- El calendario de tasa cero muestra por cuota quién pagó, quién abonó parcialmente y quién sigue pendiente. Los abonos a TC se aplican a la parte de la persona vinculada al aporte, empezando por sus cuotas más antiguas de esa tarjeta; no cubren visualmente la parte de otra persona. «A TC» aparece completo cuando las partes de todos los responsables están abonadas, aunque la cuota total difiera un centavo por el reparto independiente de redondeos. Los resúmenes mensuales muestran la cuota combinada cuando coinciden varias compras.
 
 ## Shells y componentes compartidos
 
@@ -116,10 +120,10 @@ Los cinco archivos habilitan RLS y definen políticas para usuarios autenticados
 - Pretty Salon conserva una identidad visual y navegación interna propias.
 - Recordatorios conserva el historial de cosas devueltas separado y permite reclasificar `No lo sé`; las compras compartidas normales conservan su flujo previo y tasa cero funciona como una opción adicional con distribución y calendario propios.
 
-## Pendientes operativos conocidos
+## Estado operativo conocido
 
-- Ejecutar `supabase/recordatorios_compras.sql` en Supabase antes de utilizar la vertiente `Compras con tarjeta de crédito`.
-- Ejecutar `supabase/pretty_salon_settlements.sql` antes de utilizar el cuadre quincenal y verificar que los integrantes tengan roles `owner` y `member` correctos.
+- El usuario ya utiliza en su Supabase los flujos de compras a tasa cero y cuadre quincenal; los SQL del repositorio siguen siendo necesarios si se configura otra base de datos. No se ha inspeccionado directamente el esquema remoto en esta revisión.
+- El cuadre de Pretty Salon tuvo pruebas de uso y correcciones de reversión, pagos exactos y salario dividido; en la conversación aún no quedó confirmada una prueba completa posterior a la última corrección con datos reales.
 
 ## Guía de lectura selectiva
 
