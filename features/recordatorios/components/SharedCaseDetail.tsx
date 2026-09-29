@@ -224,10 +224,7 @@ export function SharedCaseDetail(props: Props) {
         </div>
         <section className="overflow-hidden rounded-2xl border border-emerald-300/40 bg-[#08131f] shadow-xl shadow-black/40">
           <div className="bg-gradient-to-r from-emerald-500/25 to-blue-500/20 px-4 py-3">
-            <div className="flex items-end justify-between gap-3">
-              <h1 className="text-xl font-semibold text-white">{sharedCase.title}</h1>
-              <p className="shrink-0 text-[10px] text-slate-300">{formatDate(today)} · {sharedCase.purchases.length} {sharedCase.purchases.length === 1 ? "compra" : "compras"}</p>
-            </div>
+            <h1 className="text-xl font-semibold text-white">{sharedCase.title}</h1>
           </div>
           <div className="border-t border-emerald-300/20 bg-emerald-400/10 px-3 py-2">
             <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-200">Detalle de la deuda</p>
