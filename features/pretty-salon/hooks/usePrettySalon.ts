@@ -280,7 +280,7 @@ export function usePrettySalon() {
 
     if (!shouldScroll) return;
 
-    if (section === "dashboard") {
+    if (section === "dashboard" || section === "cuadre") {
       scrollToTop();
       return;
     }

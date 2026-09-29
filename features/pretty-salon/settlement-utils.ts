@@ -21,18 +21,13 @@ export function accountingDateFor(month: string, half: SettlementHalf) {
 
 export function defaultSettlementDraft(suggestions?: SalonSettlement | null): SettlementDraft {
   const prior = suggestions?.draft;
-  const priorSalary = prior?.salaryAmount || String(
-    prior?.actions
-      .filter((item) => item.kind === "salary_expense")
-      .reduce((total, item) => total + item.amount, 0) || ""
-  );
   return {
     step: 1,
     realCashInitial: "",
     realBankInitial: "",
     realCashFinal: "",
     realBankFinal: "",
-    salaryAmount: priorSalary,
+    salaryAmount: "300",
     salaryAdvance: "",
     salaryPaymentMethod: prior?.salaryPaymentMethod ?? "Efectivo",
     fixedPayments: settlementFixedPayments().map((item) => {

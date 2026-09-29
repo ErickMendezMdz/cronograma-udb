@@ -310,6 +310,13 @@ export function usePrettySalonSettlement({
     const availableLoan = loanBalanceByMethod[method] ?? 0;
     const availableCash = method === "Efectivo" ? cashBalance : bankBalance;
     const physicalPayment = roundMoney(salary - advance);
+    const alreadyPaid = active.draft.actions
+      .filter((item) => item.kind === "salary_expense")
+      .reduce((total, item) => total + item.amount, 0);
+    if (salary > roundMoney(300 - alreadyPaid) + 0.001) {
+      setError("El pago supera el salario quincenal pendiente.");
+      return false;
+    }
     if (salary <= 0 || advance > salary || advance > availableLoan + 0.001) {
       setError(`El adelanto no puede superar lo prestado desde ${method}.`);
       return false;

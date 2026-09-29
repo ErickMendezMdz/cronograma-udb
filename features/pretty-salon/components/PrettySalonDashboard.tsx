@@ -77,7 +77,6 @@ export function PrettySalonDashboard() {
     userId,
     email,
     activeSection,
-    setActiveSection,
     selectedMonth,
     setSelectedMonth,
     incomeForm,
@@ -194,7 +193,7 @@ export function PrettySalonDashboard() {
           <PrettySectionTabs
             items={sectionItems}
             activeSection={activeSection}
-            onChange={setActiveSection}
+            onChange={switchSection}
           />
 
           <div className="mt-5 hidden rounded-lg border border-[#30333a] bg-[#181a1e] p-4 lg:block">
