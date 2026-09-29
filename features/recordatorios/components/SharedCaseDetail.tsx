@@ -55,6 +55,22 @@ export function SharedCaseDetail(props: Props) {
   const { sharedCase, cards, accounts, saving } = props;
   const balances = useMemo(() => getParticipantBalances(sharedCase), [sharedCase]);
   const totals = useMemo(() => caseTotals(sharedCase), [sharedCase]);
+  const cardProgress = useMemo(() => {
+    const paymentOwner = new Map(sharedCase.payments.map((item) => [item.id, item.participantId]));
+    return new Map(sharedCase.participants.map((person) => {
+      const byCard = new Map<string, number>();
+      for (const item of sharedCase.allocations) {
+        if (item.destinationType !== "card" || paymentOwner.get(item.paymentId) !== person.id) continue;
+        const cardId = item.cardId ?? "missing";
+        byCard.set(cardId, (byCard.get(cardId) ?? 0) + item.amount);
+      }
+      return [person.id, [...byCard].map(([cardId, amount]) => ({
+        cardId,
+        cardName: cards.find((card) => card.id === cardId)?.name ?? "Tarjeta eliminada",
+        amount,
+      }))] as const;
+    }));
+  }, [sharedCase, cards]);
   const [panel, setPanel] = useState<"none" | "purchase" | "payment" | "allocation">("none");
   const [shareMode, setShareMode] = useState(false);
   const [highlighted, setHighlighted] = useState("");
@@ -267,8 +283,8 @@ export function SharedCaseDetail(props: Props) {
         </form>
       ) : null}
 
-      <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[['Compras', totals.purchaseTotal], ['Por recoger', totals.collectable], ['Recogido', totals.received], ['Pendiente', totals.pending], ['Sin destinar', totals.unallocated]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{formatMoney(Number(value))}</p></article>)}
+      <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {[['Compras', totals.purchaseTotal], ['Por recoger', totals.collectable], ['Recogido', totals.received], ['Pendiente', totals.pending], ['Abonado a TC', totals.cardPaid], ['Sin destinar', totals.unallocated]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{formatMoney(Number(value))}</p></article>)}
       </section>
 
       <div className="mt-5 flex flex-wrap gap-2">
@@ -284,10 +300,10 @@ export function SharedCaseDetail(props: Props) {
       {panel === "allocation" ? <form onSubmit={submitAllocation} className="mt-4 rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4"><h2 className="font-semibold text-slate-100">¿Qué hiciste con el dinero?</h2><p className="mt-1 text-xs text-slate-500">Disponible sin destinar: {formatMoney(totals.unallocated)}</p><div className="mt-4 grid gap-3 md:grid-cols-3"><label><span className="text-sm text-slate-400">Aporte registrado</span><select className={inputClass} value={allocation.paymentId} onChange={(e) => { const source = sharedCase.payments.find((item) => item.id === e.target.value); const used = sharedCase.allocations.filter((item) => item.paymentId === e.target.value).reduce((sum, item) => sum + item.amount, 0); setAllocation({ ...allocation, paymentId: e.target.value, amount: source ? String(Math.max(0, source.amount - used).toFixed(2)) : "" }); }} required><option value="">Seleccionar</option>{sharedCase.payments.map((item) => { const person = balances.find((balance) => balance.id === item.participantId); const used = sharedCase.allocations.filter((entry) => entry.paymentId === item.id).reduce((sum, entry) => sum + entry.amount, 0); const available = Math.max(0, item.amount - used); return <option key={item.id} value={item.id} disabled={available <= 0}>{person?.name} · {formatDate(item.paidAt)} · disponible {formatMoney(available)}</option>; })}</select></label><label><span className="text-sm text-slate-400">Monto</span><input className={inputClass} type="number" min="0.01" step="0.01" value={allocation.amount} onChange={(e) => setAllocation({ ...allocation, amount: e.target.value })} required /></label><label><span className="text-sm text-slate-400">Destino</span><select className={inputClass} value={allocation.destinationType} onChange={(e) => setAllocation({ ...allocation, destinationType: e.target.value as NewAllocationInput["destinationType"] })}><option value="card">Abono a tarjeta</option><option value="savings">Guardado en cuenta</option><option value="other">Otro</option></select></label><label><span className="text-sm text-slate-400">Fecha</span><input className={inputClass} type="date" value={allocation.allocatedAt} onChange={(e) => setAllocation({ ...allocation, allocatedAt: e.target.value })} required /></label>{allocation.destinationType === "card" ? <label><span className="text-sm text-slate-400">Tarjeta</span><select className={inputClass} value={allocation.cardId} onChange={(e) => setAllocation({ ...allocation, cardId: e.target.value })} required><option value="">Seleccionar</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select></label> : null}{allocation.destinationType === "savings" ? <label><span className="text-sm text-slate-400">Cuenta</span><select className={inputClass} value={allocation.accountId} onChange={(e) => setAllocation({ ...allocation, accountId: e.target.value })} required><option value="">Seleccionar</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label> : null}<label className="md:col-span-2"><span className="text-sm text-slate-400">Nota</span><input className={inputClass} value={allocation.notes} onChange={(e) => setAllocation({ ...allocation, notes: e.target.value })} /></label></div><Button type="submit" disabled={saving || totals.unallocated <= 0} className="mt-4">Guardar destino</Button></form> : null}
 
       <section className="mt-6 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70">
-        <div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Quién debe y quién aportó</h2><p className="mt-1 text-sm text-slate-400">Edita nombres o quita a un hermano. Cada persona, incluida tu parte, registra su aporte completo.</p></div>
+        <div className="border-b border-slate-700 p-4"><h2 className="font-semibold text-slate-100">Quién debe, quién aportó y qué se abonó a TC</h2><p className="mt-1 text-sm text-slate-400">Cada persona, incluida tu parte, registra su aporte completo. Los abonos a tarjeta se muestran según el destino registrado para sus aportes.</p></div>
         <div className="divide-y divide-slate-700">
           {balances.map((balance) => (
-            <article key={balance.id} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(90px,0.7fr))_minmax(180px,1fr)] md:items-center">
+            <article key={balance.id} className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(150px,1.4fr)_repeat(5,minmax(95px,1fr))_minmax(150px,1.2fr)] lg:items-center">
               <div>
                 {editingParticipantId === balance.id ? (
                   <div><input className={inputClass} value={participantName} onChange={(event) => setParticipantName(event.target.value)} autoFocus /><div className="mt-2 flex flex-wrap gap-2"><Button disabled={saving || !participantName.trim()} className="px-3 py-1.5" onClick={() => saveParticipantName(balance.id)}>Guardar</Button><Button variant="secondary" className="px-3 py-1.5" onClick={() => setEditingParticipantId(null)}>Cancelar</Button></div></div>
@@ -298,6 +314,8 @@ export function SharedCaseDetail(props: Props) {
               <div><p className="text-xs text-slate-500">Asignado</p><p className="text-sm text-slate-200">{formatMoney(balance.assigned)}</p></div>
               <div><p className="text-xs text-slate-500">Aportado</p><p className="text-sm text-emerald-300">{formatMoney(balance.paid)}</p></div>
               <div><p className="text-xs text-slate-500">Debe</p><p className="text-sm font-semibold text-amber-200">{formatMoney(balance.pending)}</p></div>
+              <div><p className="text-xs text-slate-500">Abonado a TC</p><p className="text-sm font-semibold text-blue-300">{formatMoney((cardProgress.get(balance.id) ?? []).reduce((sum, item) => sum + item.amount, 0))}</p>{cardProgress.get(balance.id)?.map((item) => <p key={item.cardId} className="text-xs text-slate-400">{item.cardName}: {formatMoney(item.amount)}</p>)}</div>
+              <div><p className="text-xs text-slate-500">Aún no abonado a TC</p><p className="text-sm text-slate-200">{formatMoney(Math.max(0, balance.paid - (cardProgress.get(balance.id) ?? []).reduce((sum, item) => sum + item.amount, 0)))}</p></div>
               <div><p className="text-xs text-slate-500">Oportunidades</p><p className="text-sm text-slate-300">{balance.pending <= 0 ? "—" : balance.status === "overdue" ? `Venció ${formatDate(balance.firstOpportunity)}` : `${formatDate(balance.firstOpportunity)}${balance.secondOpportunity ? ` o ${formatDate(balance.secondOpportunity)}` : ""}`}</p></div>
             </article>
           ))}
