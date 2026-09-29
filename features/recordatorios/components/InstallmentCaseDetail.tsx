@@ -23,7 +23,7 @@ type Props = {
 const inputClass = "mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-base text-slate-100 outline-none focus:border-emerald-400 sm:text-sm";
 type PaymentForm = { participantId: string; amount: string; paidAt: string; method: string; route: "account" | "direct_card"; accountId: string; cardId: string; notes: string };
 const emptyPayment = (today: string): PaymentForm => ({ participantId: "", amount: "", paidAt: today, method: "Transferencia", route: "account", accountId: "", cardId: "", notes: "" });
-type InstallmentProgress = InstallmentRow & { collected: number; collectedByParticipant: Record<string, number>; paidToCard: number };
+type InstallmentProgress = InstallmentRow & { collected: number; collectedByParticipant: Record<string, number>; paidToCard: number; cardSharesCovered: boolean };
 
 const toCents = (amount: number) => Math.round(amount * 100);
 
@@ -73,7 +73,7 @@ function InstallmentCalendar({ rows, sharedCase }: { rows: InstallmentProgress[]
                   );
                 })}
                 <td className={`p-2 ${pending.length === 0 ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.collected)}</td>
-                <td className={`p-2 ${toCents(row.paidToCard) >= toCents(row.total) ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.paidToCard)}</td>
+                <td className={`p-2 ${row.cardSharesCovered ? "text-emerald-300" : "text-amber-200"}`}>{formatMoney(row.paidToCard)}</td>
                 <td className={`p-2 font-medium ${pending.length === 0 ? "text-emerald-300" : "text-amber-200"}`}>{pending.length === 0 ? "Completo" : `Falta: ${pending.map((person) => person.name).join(", ")}`}</td>
               </tr>
             );
@@ -110,14 +110,17 @@ export function InstallmentCaseDetail(props: Props) {
         return sum + applied;
       }, 0);
       const cardBalance = cardPaid[row.cardId ?? ""];
+      let cardSharesCovered = true;
       const appliedToCard = sharedCase.participants.reduce((sum, person) => {
         const available = cardBalance?.[person.id] ?? 0;
-        const applied = Math.min(available, toCents(row.participantAmounts[person.id] ?? 0));
+        const due = toCents(row.participantAmounts[person.id] ?? 0);
+        const applied = Math.min(available, due);
+        if (applied < due) cardSharesCovered = false;
         if (cardBalance) cardBalance[person.id] = available - applied;
         return sum + applied;
       }, 0);
       const paidToCard = Math.min(appliedToCard, toCents(row.total)) / 100;
-      return { ...row, collected, collectedByParticipant, paidToCard };
+      return { ...row, collected, collectedByParticipant, paidToCard, cardSharesCovered };
     });
   }, [installments, sharedCase.allocations, sharedCase.participants, sharedCase.payments]);
   const [panel, setPanel] = useState<"none" | "purchase" | "payment" | "allocation">("none");
