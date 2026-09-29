@@ -14,6 +14,8 @@ export type SettlementActionKind =
   | "loan_borrow"
   | "loan_repay"
   | "salary_advance_repay"
+  | "salary_discount_repay"
+  | "salary_discount_expense"
   | "fixed_expense"
   | "salary_expense"
   | "card_payment";

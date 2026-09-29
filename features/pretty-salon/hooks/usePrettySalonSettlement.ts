@@ -48,7 +48,7 @@ type UsePrettySalonSettlementOptions = {
   selectedMonth: string;
   balances: BalanceItem[];
   pendingCardTotal: number;
-  loanBalanceByMethod: Record<"Efectivo" | "Cuenta Banco", number>;
+  loanedBalance: number;
   onReload: () => Promise<boolean>;
 };
 
@@ -63,7 +63,7 @@ export function usePrettySalonSettlement({
   selectedMonth,
   balances,
   pendingCardTotal,
-  loanBalanceByMethod,
+  loanedBalance,
   onReload,
 }: UsePrettySalonSettlementOptions) {
   const [settlements, setSettlements] = useState<SalonSettlement[]>([]);
@@ -292,7 +292,7 @@ export function usePrettySalonSettlement({
     }
     await appendAction({
       kind: actionKind,
-      label: movementType === "borrow" ? "Dinero prestado omitido" : "Reposicion de dinero prestado",
+      label: actionKind === "salary_discount_repay" ? "Adelanto descontado del salario" : movementType === "borrow" ? "Dinero prestado omitido" : "Reposicion de dinero prestado",
       amount: roundMoney(amount),
       paymentMethod,
       financialRecordId: result.data.id,
@@ -302,33 +302,64 @@ export function usePrettySalonSettlement({
     return true;
   }
 
+  function pendingSalaryDiscount() {
+    const actions = activeRef.current?.draft.actions ?? [];
+    return roundMoney(
+      actions.filter((item) => item.kind === "salary_discount_repay").reduce((total, item) => total + item.amount, 0) -
+      actions.filter((item) => item.kind === "salary_discount_expense").reduce((total, item) => total + item.amount, 0)
+    );
+  }
+
+  async function registerSalaryDiscount(amount: number, method: string) {
+    const current = activeRef.current;
+    if (!current) return false;
+    const pending = pendingSalaryDiscount();
+    if (pending > 0.001) {
+      const repaidAction = [...current.draft.actions].reverse().find((item) => item.kind === "salary_discount_repay");
+      if (!repaidAction) return false;
+      const recorded = await addTransaction({ kind: "expense", actionKind: "salary_discount_expense", concept: "Adelanto de salario", category: "Salarios", amount: pending, paymentMethod: repaidAction.paymentMethod });
+      if (recorded) {
+        const paid = activeRef.current?.draft.actions.filter((item) => item.kind === "salary_expense" || item.kind === "salary_discount_expense").reduce((total, item) => total + item.amount, 0) ?? 0;
+        updateDraft("salaryAmount", Math.max(roundMoney(300 - paid), 0).toFixed(2));
+      }
+      return recorded;
+    }
+    const value = roundMoney(amount);
+    const paid = current.draft.actions.filter((item) => item.kind === "salary_expense" || item.kind === "salary_discount_expense").reduce((total, item) => total + item.amount, 0);
+    if (value <= 0 || value > loanedBalance + 0.001 || value > roundMoney(300 - paid) + 0.001) {
+      setError("El adelanto supera el préstamo o el salario pendiente.");
+      return false;
+    }
+    const repaid = await addLoanMovement("repay", value, method, "salary_discount_repay");
+    if (!repaid) return false;
+    const recorded = await addTransaction({ kind: "expense", actionKind: "salary_discount_expense", concept: "Adelanto de salario", category: "Salarios", amount: value, paymentMethod: method });
+    if (recorded) updateDraft("salaryAmount", Math.max(roundMoney(300 - paid - value), 0).toFixed(2));
+    return recorded;
+  }
+
   async function registerSalary() {
-    if (!active || !validMoney(active.draft.salaryAmount) || !validMoney(active.draft.salaryAdvance)) return false;
+    if (!active || !validMoney(active.draft.salaryAmount)) return false;
     const salary = roundMoney(Number(active.draft.salaryAmount));
-    const advance = roundMoney(Number(active.draft.salaryAdvance));
     const method = active.draft.salaryPaymentMethod as "Efectivo" | "Cuenta Banco";
-    const availableLoan = loanBalanceByMethod[method] ?? 0;
     const availableCash = method === "Efectivo" ? cashBalance : bankBalance;
-    const physicalPayment = roundMoney(salary - advance);
     const alreadyPaid = active.draft.actions
-      .filter((item) => item.kind === "salary_expense")
+      .filter((item) => item.kind === "salary_expense" || item.kind === "salary_discount_expense")
       .reduce((total, item) => total + item.amount, 0);
+    if (loanedBalance > 0.01 || pendingSalaryDiscount() > 0.01) {
+      setError("Primero repón todo el dinero prestado.");
+      return false;
+    }
     if (salary > roundMoney(300 - alreadyPaid) + 0.001) {
       setError("El pago supera el salario quincenal pendiente.");
       return false;
     }
-    if (salary <= 0 || advance > salary || advance > availableLoan + 0.001) {
-      setError(`El adelanto no puede superar lo prestado desde ${method}.`);
+    if (salary <= 0) {
+      setError("Escribe un pago de salario mayor que cero.");
       return false;
     }
-    if (physicalPayment > availableCash + 0.001) {
+    if (salary > availableCash + 0.001) {
       setError(`No hay suficiente saldo en ${method}. Disponible: ${availableCash.toFixed(2)}.`);
       return false;
-    }
-
-    if (advance > 0) {
-      const repaid = await addLoanMovement("repay", advance, active.draft.salaryPaymentMethod, "salary_advance_repay");
-      if (!repaid) return false;
     }
 
     const registered = await addTransaction({
@@ -338,12 +369,11 @@ export function usePrettySalonSettlement({
       category: "Salarios",
       amount: salary,
       paymentMethod: active.draft.salaryPaymentMethod,
-      notes: advance > 0 ? `Incluye ${advance.toFixed(2)} descontados como adelanto salarial.` : "",
     });
     if (!registered) return false;
     const current = activeRef.current;
     if (current) {
-      await persistDraft({ ...current.draft, salaryAmount: "", salaryAdvance: "" });
+      await persistDraft({ ...current.draft, salaryAmount: "" });
     }
     return true;
   }
@@ -492,6 +522,7 @@ export function usePrettySalonSettlement({
     addTransfer,
     recordPhysicalTransfer,
     addLoanMovement,
+    registerSalaryDiscount,
     registerSalary,
     registerFixedPayment,
     registerCardPayment,

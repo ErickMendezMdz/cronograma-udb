@@ -20,7 +20,6 @@ type PrettySettlementSectionProps = {
   paymentBreakdown: Array<{ method: string; balance: number }>;
   pendingCardTotal: number;
   loanedBalance: number;
-  loanBalanceByMethod: Record<"Efectivo" | "Cuenta Banco", number>;
   onReload: () => Promise<boolean>;
   onMonthChange: (month: string) => void;
   onNavigate: (section: SectionId) => void;
@@ -80,7 +79,7 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
     selectedMonth: props.selectedMonth,
     balances: props.paymentBreakdown,
     pendingCardTotal: props.pendingCardTotal,
-    loanBalanceByMethod: props.loanBalanceByMethod,
+    loanedBalance: props.loanedBalance,
     onReload: props.onReload,
   });
   const [correctionType, setCorrectionType] = useState<CorrectionType>("income");
@@ -89,21 +88,29 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
   const [correctionConcept, setCorrectionConcept] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const [pendingStart, setPendingStart] = useState(false);
+  const [repaymentMode, setRepaymentMode] = useState<"salary" | "returned">("salary");
+  const [repaymentMethod, setRepaymentMethod] = useState<"Efectivo" | "Cuenta Banco">("Efectivo");
+  const [repaymentAmount, setRepaymentAmount] = useState("");
+  const [repaymentBusy, setRepaymentBusy] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
-  const previousStep = useRef<number | null>(null);
+  const stepRef = useRef<HTMLDivElement>(null);
+  const previousStep = useRef<number | null | undefined>(undefined);
 
   const active = settlement.active;
   const draft = active?.draft;
 
   useEffect(() => {
+    if (settlement.loading) return;
     const step = draft?.step ?? null;
-    if (previousStep.current !== step) {
-      previousStep.current = step;
-      if (step !== null) {
-        window.requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
-      }
-    }
-  }, [draft?.step]);
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        (step === null ? sectionRef.current : stepRef.current)?.scrollIntoView({ block: "start" });
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [draft?.step, settlement.loading]);
 
   useEffect(() => {
     if (active && active.periodMonth !== props.selectedMonth) {
@@ -124,12 +131,14 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
     : 0;
   const physicalTransferFrom = (initialCashDiff ?? 0) > 0 ? "Efectivo" : "Cuenta Banco";
   const physicalTransferTo = physicalTransferFrom === "Efectivo" ? "Cuenta Banco" : "Efectivo";
-  const paidSalary = draft?.actions.filter((item) => item.kind === "salary_expense").reduce((total, item) => total + item.amount, 0) ?? 0;
+  const paidSalary = draft?.actions.filter((item) => item.kind === "salary_expense" || item.kind === "salary_discount_expense").reduce((total, item) => total + item.amount, 0) ?? 0;
+  const salaryDiscount = draft?.actions.filter((item) => item.kind === "salary_discount_expense").reduce((total, item) => total + item.amount, 0) ?? 0;
   const salaryRemaining = Math.max(roundMoney(300 - paidSalary), 0);
   const salaryMethodBalance = draft?.salaryPaymentMethod === "Cuenta Banco" ? settlement.bankBalance : settlement.cashBalance;
-  const salaryLoanBalance = props.loanBalanceByMethod[draft?.salaryPaymentMethod as "Efectivo" | "Cuenta Banco"] ?? 0;
-  const suggestedAdvance = Math.min(salaryLoanBalance, salaryRemaining);
-  const maxSalaryPayment = Math.min(salaryRemaining, Math.max(salaryMethodBalance, 0) + suggestedAdvance);
+  const maxSalaryPayment = Math.min(salaryRemaining, Math.max(salaryMethodBalance, 0));
+  const pendingDiscount = roundMoney((draft?.actions.filter((item) => item.kind === "salary_discount_repay").reduce((total, item) => total + item.amount, 0) ?? 0) - salaryDiscount);
+  const repaymentSuggested = repaymentMode === "salary" ? Math.min(Math.max(props.loanedBalance, 0), salaryRemaining) : Math.max(props.loanedBalance, 0);
+  const repaymentValue = amount(repaymentAmount || repaymentSuggested.toFixed(2));
   const suggestedCorrectionAmount = Math.abs(correctionMethod === "Efectivo" ? initialCashDiff ?? 0 : initialBankDiff ?? 0).toFixed(2);
 
   async function runCorrection() {
@@ -194,6 +203,30 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
     await settlement.deleteSettlement(item);
   }
 
+  async function saveAndExit() {
+    if (!draft) return;
+    const saved = await settlement.persistDraft(draft);
+    if (saved) props.onNavigate("dashboard");
+  }
+
+  async function recordRepayment() {
+    if (repaymentBusy) return;
+    setLocalError(null);
+    if (pendingDiscount <= 0.01 && (repaymentValue <= 0 || repaymentValue > props.loanedBalance + 0.001 || (repaymentMode === "salary" && repaymentValue > salaryRemaining + 0.001))) {
+      setLocalError("El monto supera lo prestado o el salario pendiente.");
+      return;
+    }
+    setRepaymentBusy(true);
+    try {
+      const ok = pendingDiscount > 0.01 || repaymentMode === "salary"
+        ? await settlement.registerSalaryDiscount(pendingDiscount > 0.01 ? pendingDiscount : repaymentValue, repaymentMethod)
+        : await settlement.addLoanMovement("repay", repaymentValue, repaymentMethod);
+      if (ok) setRepaymentAmount("");
+    } finally {
+      setRepaymentBusy(false);
+    }
+  }
+
   if (settlement.loading) {
     return <div className="mt-6 rounded-lg border border-[#30333a] bg-[#181a1e] p-5 text-[#aeb5bf]">Cargando cuadres...</div>;
   }
@@ -252,18 +285,17 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
               <div className="h-full bg-[#00c2a8] transition-all" style={{ width: `${((draft?.step ?? 1) / 6) * 100}%` }} />
             </div>
             {draft ? (
-              <button
-                onClick={() => void settlement.persistDraft(draft)}
-                disabled={settlement.saving}
-                className={`${secondaryButton} mt-4 w-full sm:w-auto`}
-              >
-                {settlement.saving ? "Guardando..." : "Guardar y continuar despues"}
-              </button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => void saveAndExit()} disabled={settlement.saving || repaymentBusy} className={secondaryButton}>
+                  {settlement.saving ? "Guardando..." : "Cancelar y guardar avance"}
+                </button>
+                <button onClick={() => void settlement.persistDraft(draft)} disabled={settlement.saving || repaymentBusy} className={secondaryButton}>Guardar y continuar</button>
+              </div>
             ) : null}
           </div>
 
           {draft?.step === 1 ? (
-            <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+            <div ref={stepRef} className="scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
               <h3 className="text-xl font-semibold text-[#f7f9fb]">1. Cuenta el dinero</h3>
               <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">Escribe únicamente lo que tienes realmente. En el siguiente paso te guiaremos para resolver cualquier diferencia.</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -282,7 +314,7 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
           ) : null}
 
           {draft?.step === 2 ? (
-            <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+            <div ref={stepRef} className="scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
               <h3 className="text-xl font-semibold text-[#f7f9fb]">2. Resuelve las diferencias</h3>
               <p className="mt-2 text-sm leading-6 text-[#aeb5bf]">
                 {initialBalanced
@@ -319,7 +351,7 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
           ) : null}
 
           {draft?.step === 3 ? (
-            <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+            <div ref={stepRef} className="scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
               <h3 className="text-xl font-semibold text-[#f7f9fb]">3. Pagos fijos</h3>
               <p className="mt-2 text-sm text-[#aeb5bf]">Los últimos montos quedan sugeridos para el siguiente cuadre. Indica cuántos meses pagarás.</p>
               <div className="mt-5"><AvailableBalances cash={settlement.cashBalance} bank={settlement.bankBalance} /></div>
@@ -341,38 +373,59 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
           ) : null}
 
           {draft?.step === 4 ? (
-            <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
-              <h3 className="text-xl font-semibold text-[#f7f9fb]">4. Prestado y salario</h3>
-              <p className="mt-2 text-sm text-[#aeb5bf]">Salario quincenal: <strong className="text-[#f7f9fb]">{money.format(300)}</strong>. Ya pagado: {money.format(paidSalary)}. Pendiente de salario: <strong className="text-[#ffe06b]">{money.format(salaryRemaining)}</strong>.</p>
-              <p className="mt-2 text-sm text-[#aeb5bf]">Pendiente de reponer: <strong className="text-[#ffe06b]">{money.format(Math.max(props.loanedBalance, 0))}</strong>. El adelanto se repone primero y se descuenta del salario a entregar.</p>
+            <div ref={stepRef} className="scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+              <h3 className="text-xl font-semibold text-[#f7f9fb]">4. Reposición y salario</h3>
+              {props.loanedBalance > 0.01 || pendingDiscount > 0.01 ? (
+                <div className="mt-5 rounded-lg border border-[#4b4320] bg-[#28240f] p-4">
+                  <p className="font-semibold text-[#ffe06b]">Primero: reponer {money.format(Math.max(props.loanedBalance, 0))} prestados</p>
+                  <p className="mt-2 text-sm leading-6 text-[#d8dde3]">Elige cómo reponerlos. Si los descuentas del salario, el pago líquido baja. Si recibes el dinero en efectivo o por transferencia, aumenta el disponible.</p>
+                  {pendingDiscount > 0.01 ? <p className="mt-3 text-sm text-[#ffe06b]">Falta completar el registro de {money.format(pendingDiscount)} descontados. Pulsa el botón para terminarlo.</p> : (
+                    <>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        <button onClick={() => { setRepaymentMode("salary"); setRepaymentAmount(""); }} className={repaymentMode === "salary" ? primaryButton : secondaryButton}>Descontar del salario</button>
+                        <button onClick={() => { setRepaymentMode("returned"); setRepaymentAmount(""); }} className={repaymentMode === "returned" ? primaryButton : secondaryButton}>Recibir reposición</button>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label><span className="text-sm text-[#c7ced6]">Monto a reponer</span><input type="number" inputMode="decimal" min="0" max={repaymentSuggested} step="0.01" value={repaymentAmount || repaymentSuggested.toFixed(2)} onChange={(event) => setRepaymentAmount(event.target.value)} className={inputClass} /></label>
+                        <label><span className="text-sm text-[#c7ced6]">{repaymentMode === "salary" ? "Medio donde se aplica" : "Recibido por"}</span><select value={repaymentMethod} onChange={(event) => setRepaymentMethod(event.target.value as "Efectivo" | "Cuenta Banco")} className={inputClass}><option value="Efectivo">Efectivo</option><option value="Cuenta Banco">Transferencia a cuenta</option></select></label>
+                      </div>
+                      {repaymentMode === "salary" ? <p className="mt-3 text-sm text-[#d8dde3]">Salario base {money.format(300)}. Puedes descontar hasta {money.format(repaymentSuggested)}; lo descontado cuenta como adelanto de salario.</p> : null}
+                    </>
+                  )}
+                  <button onClick={() => void recordRepayment()} disabled={settlement.saving || repaymentBusy || (pendingDiscount <= 0.01 && repaymentValue <= 0)} className={`${primaryButton} mt-4 w-full`}>{repaymentBusy ? "Registrando..." : pendingDiscount > 0.01 ? "Completar descuento" : repaymentMode === "salary" ? "Registrar descuento y reposición" : "Registrar dinero recibido"}</button>
+                </div>
+              ) : (
+                <div className="mt-5 rounded-lg border border-[#276357] bg-[#0f312e] p-4">
+                  <p className="font-semibold text-[#71f2d8]">Préstamo repuesto. Ahora paga el salario.</p>
+                  <p className="mt-2 text-sm text-[#d8dde3]">Salario base {money.format(300)} · Descontado como adelanto {money.format(salaryDiscount)} · Entregado {money.format(paidSalary - salaryDiscount)} · Falta entregar {money.format(salaryRemaining)}.</p>
+                </div>
+              )}
               <div className="mt-5"><AvailableBalances cash={settlement.cashBalance} bank={settlement.bankBalance} /></div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <label><span className="text-sm text-[#c7ced6]">Monto de este pago</span><input type="number" inputMode="decimal" min="0" max={salaryRemaining} step="0.01" value={draft.salaryAmount} onChange={(event) => settlement.updateDraft("salaryAmount", event.target.value)} className={inputClass} /></label>
-                <label><span className="text-sm text-[#c7ced6]">Medio del salario</span><select value={draft.salaryPaymentMethod} onChange={(event) => { settlement.updateDraft("salaryPaymentMethod", event.target.value); settlement.updateDraft("salaryAdvance", ""); }} className={inputClass}><option>Efectivo</option><option>Cuenta Banco</option></select></label>
-                <label><span className="text-sm text-[#c7ced6]">Descontar como adelanto</span><input type="number" inputMode="decimal" min="0" max={props.loanBalanceByMethod[draft.salaryPaymentMethod as "Efectivo" | "Cuenta Banco"] ?? 0} step="0.01" value={draft.salaryAdvance} onChange={(event) => settlement.updateDraft("salaryAdvance", event.target.value)} className={inputClass} /><span className="mt-1 block text-xs text-[#aeb5bf]">Prestado en {draft.salaryPaymentMethod}: {money.format(props.loanBalanceByMethod[draft.salaryPaymentMethod as "Efectivo" | "Cuenta Banco"] ?? 0)}</span></label>
-                <div className="rounded-lg bg-[#101113] p-4"><p className="text-sm text-[#aeb5bf]">Entregar físicamente</p><p className="mt-1 text-2xl font-semibold text-[#71f2d8]">{money.format(Math.max(amount(draft.salaryAmount) - amount(draft.salaryAdvance), 0))}</p></div>
-              </div>
-              <p className="mt-4 text-sm text-[#aeb5bf]">Con {draft.salaryPaymentMethod} y un adelanto de {money.format(suggestedAdvance)}, puedes pagar ahora hasta <strong className="text-[#71f2d8]">{money.format(maxSalaryPayment)}</strong> del salario pendiente.</p>
-              <button onClick={() => { settlement.updateDraft("salaryAmount", maxSalaryPayment.toFixed(2)); settlement.updateDraft("salaryAdvance", Math.min(suggestedAdvance, maxSalaryPayment).toFixed(2)); }} disabled={maxSalaryPayment <= 0 || settlement.saving} className={`${secondaryButton} mt-3 w-full`}>Usar monto disponible y reponer adelanto</button>
-              <p className="mt-4 text-xs leading-5 text-[#aeb5bf]">El adelanto se cambiará automáticamente de prestado a repuesto en el mismo medio. Solo saldrá físicamente la diferencia del salario.</p>
-              <button onClick={() => void settlement.registerSalary()} disabled={settlement.saving || amount(draft.salaryAmount) <= 0 || amount(draft.salaryAmount) > salaryRemaining || amount(draft.salaryAdvance) > salaryLoanBalance || amount(draft.salaryAdvance) > amount(draft.salaryAmount) || amount(draft.salaryAmount) - amount(draft.salaryAdvance) > salaryMethodBalance} className={`${primaryButton} mt-4 w-full`}>Registrar pago de salario</button>
-              {draft.actions.some((item) => item.kind === "salary_expense") ? (
+              {props.loanedBalance <= 0.01 && pendingDiscount <= 0.01 && salaryRemaining > 0.01 ? <div className="mt-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label><span className="text-sm text-[#c7ced6]">Monto de este pago</span><input type="number" inputMode="decimal" min="0" max={salaryRemaining} step="0.01" value={draft.salaryAmount} onChange={(event) => settlement.updateDraft("salaryAmount", event.target.value)} className={inputClass} /></label>
+                  <label><span className="text-sm text-[#c7ced6]">Pagar desde</span><select value={draft.salaryPaymentMethod} onChange={(event) => settlement.updateDraft("salaryPaymentMethod", event.target.value)} className={inputClass}><option>Efectivo</option><option>Cuenta Banco</option></select></label>
+                </div>
+                <p className="mt-3 text-sm text-[#aeb5bf]">Puedes entregar ahora hasta {money.format(maxSalaryPayment)} desde {draft.salaryPaymentMethod}.</p>
+                <button onClick={() => settlement.updateDraft("salaryAmount", maxSalaryPayment.toFixed(2))} disabled={maxSalaryPayment <= 0} className={`${secondaryButton} mt-3 w-full`}>Usar monto disponible</button>
+                <button onClick={() => void settlement.registerSalary()} disabled={settlement.saving || amount(draft.salaryAmount) <= 0 || amount(draft.salaryAmount) > maxSalaryPayment} className={`${primaryButton} mt-3 w-full`}>Registrar pago de salario</button>
+              </div> : null}
+              {paidSalary > 0 ? (
                 <div className="mt-4 rounded-lg border border-[#30333a] bg-[#101113] p-4">
-                  <p className="text-sm font-semibold text-[#f7f9fb]">Pagos registrados</p>
+                  <p className="text-sm font-semibold text-[#f7f9fb]">Salario aplicado: {money.format(paidSalary)} de {money.format(300)}</p>
                   <div className="mt-2 space-y-2">
-                    {draft.actions.filter((item) => item.kind === "salary_expense").map((item) => (
-                      <div key={item.id} className="flex justify-between gap-3 text-sm"><span className="text-[#aeb5bf]">{item.paymentMethod}</span><span className="font-semibold text-[#71f2d8]">{money.format(item.amount)}</span></div>
+                    {draft.actions.filter((item) => item.kind === "salary_expense" || item.kind === "salary_discount_expense").map((item) => (
+                      <div key={item.id} className="flex justify-between gap-3 text-sm"><span className="text-[#aeb5bf]">{item.kind === "salary_discount_expense" ? "Adelanto descontado" : item.paymentMethod}</span><span className="font-semibold text-[#71f2d8]">{money.format(item.amount)}</span></div>
                     ))}
                   </div>
-                  <p className="mt-3 text-xs text-[#aeb5bf]">Puedes registrar otro pago cambiando el monto o el medio.</p>
                 </div>
               ) : null}
-              <div className="mt-5 flex justify-between gap-3"><button onClick={() => void settlement.goToStep(3)} className={secondaryButton}>Atrás</button><button onClick={() => void settlement.goToStep(5)} className={primaryButton}>Continuar</button></div>
+              <div className="mt-5 flex justify-between gap-3"><button onClick={() => void settlement.goToStep(3)} className={secondaryButton}>Atrás</button><button onClick={() => void settlement.goToStep(5)} disabled={props.loanedBalance > 0.01 || pendingDiscount > 0.01} className={primaryButton}>Continuar</button></div>
             </div>
           ) : null}
 
           {draft?.step === 5 ? (
-            <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+            <div ref={stepRef} className="scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
               <h3 className="text-xl font-semibold text-[#f7f9fb]">5. Abono a la tarjeta</h3>
               <p className="mt-2 text-sm text-[#aeb5bf]">Pendiente actual: <strong className="text-[#ffe06b]">{money.format(props.pendingCardTotal)}</strong>. Tú decides cuánto abonar.</p>
               <div className="mt-5"><AvailableBalances cash={settlement.cashBalance} bank={settlement.bankBalance} /></div>
@@ -387,7 +440,7 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
           ) : null}
 
           {draft?.step === 6 ? (
-            <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+            <div ref={stepRef} className="scroll-mt-4 rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
               <h3 className="text-xl font-semibold text-[#f7f9fb]">6. Verificación final</h3>
               <p className="mt-2 text-sm text-[#aeb5bf]">Cuenta nuevamente. Ambos valores deben coincidir antes de cerrar.</p>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -402,7 +455,7 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
         </>
       )}
 
-      <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
+      {!active ? <div className="rounded-lg border border-[#30333a] bg-[#181a1e] p-4 sm:p-5">
         <h3 className="text-xl font-semibold text-[#f7f9fb]">Historial de cuadres</h3>
         <div className="mt-4 grid gap-3">
           {settlement.settlements.length === 0 ? <p className="rounded-lg bg-[#101113] p-4 text-sm text-[#aeb5bf]">Todavía no hay cuadres guardados.</p> : settlement.settlements.map((item) => (
@@ -426,7 +479,7 @@ export function PrettySettlementSection(props: PrettySettlementSectionProps) {
             </article>
           ))}
         </div>
-      </div>
+      </div> : null}
     </section>
   );
 }

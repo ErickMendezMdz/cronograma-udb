@@ -138,7 +138,6 @@ export function PrettySalonDashboard() {
     paymentBreakdown,
     cashTransferVolume,
     loanedBalance,
-    loanBalanceByMethod,
     clientRows,
     monthlyReports,
   } = usePrettySalon();
@@ -640,7 +639,6 @@ export function PrettySalonDashboard() {
               paymentBreakdown={paymentBreakdown}
               pendingCardTotal={totalPendingExpenses}
               loanedBalance={loanedBalance}
-              loanBalanceByMethod={loanBalanceByMethod}
               onReload={loadSalonData}
               onMonthChange={setSelectedMonth}
               onNavigate={switchSection}
