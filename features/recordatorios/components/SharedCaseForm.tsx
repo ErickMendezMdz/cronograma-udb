@@ -38,10 +38,6 @@ export function SharedCaseForm({ cards, saving, onSave, onCancel }: Props) {
       alert("Los participantes deben tener nombres distintos.");
       return;
     }
-    if (!participantNames.some((name) => name.toLocaleLowerCase("es") === "yo")) {
-      alert('Incluye un participante llamado "Yo" para identificar tu parte.');
-      return;
-    }
     const success = await onSave({
       title, notes, participantNames,
       purchase: {
@@ -65,7 +61,7 @@ export function SharedCaseForm({ cards, saving, onSave, onCancel }: Props) {
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <label className="block"><span className="text-sm text-slate-400">Nombre de la causa</span><input className={fieldClass} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Medicinas de mamá" required /></label>
-          <label className="block"><span className="text-sm text-slate-400">Participantes, uno por línea</span><textarea className={fieldClass} rows={8} value={names} onChange={(e) => setNames(e.target.value)} required /><span className="mt-2 block text-xs text-slate-500">Escribe “Yo” en cualquier línea; el sistema te mostrará al final y no cobrará tu parte.</span></label>
+          <label className="block"><span className="text-sm text-slate-400">Participantes, uno por línea</span><textarea className={fieldClass} rows={8} value={names} onChange={(e) => setNames(e.target.value)} required /><span className="mt-2 block text-xs text-slate-500">Incluye “Yo” solo si te corresponde una parte. Puedes quitarlo de la lista cuando la compra sea únicamente para otras personas.</span></label>
           <label className="block"><span className="text-sm text-slate-400">Notas privadas del caso</span><textarea className={fieldClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
         </div>
         <div className="space-y-4 rounded-2xl bg-slate-950/50 p-4">

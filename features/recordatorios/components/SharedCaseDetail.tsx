@@ -198,7 +198,7 @@ export function SharedCaseDetail(props: Props) {
 
   async function deleteParticipant(participantId: string) {
     if (sharedCase.participants.length <= 2) {
-      alert("El caso debe conservar al menos una persona además de tu parte.");
+      alert("El caso debe conservar al menos dos participantes.");
       return;
     }
     const payments = sharedCase.payments.filter(
