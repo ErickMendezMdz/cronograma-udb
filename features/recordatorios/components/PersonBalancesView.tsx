@@ -35,7 +35,7 @@ export function PersonBalancesView({ cases, onOpenCase }: Props) {
               {visiblePeople.map((person) => (
                 <button key={person.key} type="button" onClick={() => setSelectedKey(person.key)} className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${selected?.key === person.key ? "border-emerald-500 bg-emerald-500/10" : "border-slate-700 bg-slate-950/50 hover:border-slate-500"}`}>
                   <span className="min-w-0 truncate font-medium text-slate-100">{person.name}</span>
-                  <span className="shrink-0 text-sm font-semibold text-amber-200">{formatMoney(person.pending)}</span>
+                  <span className="shrink-0 text-right"><span className="block text-xs text-slate-400">Actualmente</span><span className="text-sm font-semibold text-amber-200">{formatMoney(person.currentPending)}</span></span>
                 </button>
               ))}
               {!visiblePeople.length ? <p className="py-4 text-sm text-slate-400">No hay personas con ese nombre.</p> : null}
@@ -48,17 +48,24 @@ export function PersonBalancesView({ cases, onOpenCase }: Props) {
                 <h3 className="text-2xl font-semibold text-slate-100">{selected.name}</h3>
                 <p className="mt-1 text-sm text-slate-400">{selected.cases.length} {selected.cases.length === 1 ? "caso abierto" : "casos abiertos"}</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {[["Total asignado", selected.assigned], ["Ya abonado", selected.paid], ["Saldo pendiente", selected.pending], ["Pendiente hasta hoy", selected.dueToday]].map(([label, value]) => (
-                    <div key={String(label)} className="rounded-xl bg-slate-950/60 p-3"><p className="text-xs text-slate-400">{label}</p><p className="mt-1 text-lg font-semibold text-slate-100">{formatMoney(Number(value))}</p></div>
+                  {[["Debe actualmente", selected.currentPending], ["Total pendiente", selected.pending], ["Cuotas futuras", Math.max(0, selected.pending - selected.currentPending)], ["Ya abonado", selected.paid]].map(([label, value]) => (
+                    <div key={String(label)} className={`rounded-xl p-3 ${label === "Debe actualmente" ? "border border-amber-500/40 bg-amber-500/10" : "bg-slate-950/60"}`}><p className="text-xs text-slate-400">{label}</p><p className={`mt-1 text-lg font-semibold ${label === "Debe actualmente" ? "text-amber-200" : "text-slate-100"}`}>{formatMoney(Number(value))}</p></div>
                   ))}
                 </div>
-                <p className="mt-3 text-xs text-slate-500">Pendiente futuro: {formatMoney(Math.max(0, selected.pending - selected.dueToday))}. En compras compartidas se considera la segunda oportunidad; en tasa cero, la fecha de cada cuota.</p>
+                <p className="mt-3 text-sm text-slate-400">Actualmente incluye lo pendiente de meses anteriores y del mes actual, aunque la cuota venza al final del mes. Total pendiente incluye también las cuotas de meses futuros.</p>
+                <p className="mt-2 text-xs text-slate-500">Total asignado en los casos abiertos: {formatMoney(selected.assigned)}.</p>
               </div>
               <div className="space-y-3">
                 {selected.cases.map((item) => (
                   <button key={item.caseId} type="button" onClick={() => onOpenCase(item.caseId)} className="w-full rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-left transition hover:border-emerald-400/70">
-                    <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">{item.caseType === "shared" ? "Compra compartida" : "Tasa cero"}</p><h4 className="mt-1 font-semibold text-slate-100">{item.title}</h4></div><span className="text-sm font-semibold text-amber-200">Debe {formatMoney(item.pending)}</span></div>
-                    <p className="mt-3 text-sm text-slate-400">Asignado {formatMoney(item.assigned)} · Abonado {formatMoney(item.paid)} · Hasta hoy {formatMoney(item.dueToday)}</p>
+                    <div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">{item.caseType === "shared" ? "Compra compartida" : "Tasa cero"}</p><h4 className="mt-1 font-semibold text-slate-100">{item.title}</h4></div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div><p className="text-xs text-slate-400">Debe actualmente</p><p className="mt-1 text-lg font-semibold text-amber-200">{formatMoney(item.currentPending)}</p></div>
+                      <div><p className="text-xs text-slate-400">Total pendiente</p><p className="mt-1 font-semibold text-slate-100">{formatMoney(item.pending)}</p></div>
+                      <div><p className="text-xs text-slate-400">Cuotas futuras</p><p className="mt-1 text-slate-300">{formatMoney(Math.max(0, item.pending - item.currentPending))}</p></div>
+                      <div><p className="text-xs text-slate-400">Ya abonado</p><p className="mt-1 text-emerald-300">{formatMoney(item.paid)}</p></div>
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500">Total asignado: {formatMoney(item.assigned)}</p>
                     <p className="mt-2 text-xs font-semibold text-blue-300">Ver caso →</p>
                   </button>
                 ))}
