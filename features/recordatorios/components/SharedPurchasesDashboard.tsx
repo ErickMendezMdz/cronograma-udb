@@ -7,7 +7,9 @@ import { SharedCaseDetail } from "@/features/recordatorios/components/SharedCase
 import { SharedCaseForm } from "@/features/recordatorios/components/SharedCaseForm";
 import { InstallmentCaseDetail } from "@/features/recordatorios/components/InstallmentCaseDetail";
 import { InstallmentCaseForm } from "@/features/recordatorios/components/InstallmentCaseForm";
+import { PersonBalancesView } from "@/features/recordatorios/components/PersonBalancesView";
 import { useSharedPurchases } from "@/features/recordatorios/hooks/useSharedPurchases";
+import { getPersonBalances } from "@/features/recordatorios/personBalances";
 import { caseTotals, formatDate, formatMoney, getParticipantBalances } from "@/features/recordatorios/utils";
 
 export function SharedPurchasesDashboard() {
@@ -15,19 +17,20 @@ export function SharedPurchasesDashboard() {
   const [creating, setCreating] = useState<"shared" | "installment" | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [view, setView] = useState<"cases" | "people">("cases");
   const selected = data.cases.find((item) => item.id === selectedId) ?? null;
-  const activeCases = data.cases.filter((item) => item.status === "active");
+  const activeCases = useMemo(() => data.cases.filter((item) => item.status === "active"), [data.cases]);
   const displayedCases = showClosed ? data.cases : activeCases;
+  const people = useMemo(() => getPersonBalances(activeCases), [activeCases]);
   const global = useMemo(() => activeCases.reduce((result, item) => {
     const totals = caseTotals(item);
     const balances = getParticipantBalances(item);
     return {
       pending: result.pending + totals.pending,
       unallocated: result.unallocated + totals.unallocated,
-      debtors: result.debtors + balances.filter((balance) => balance.pending > 0).length,
       overdue: result.overdue + balances.filter((balance) => balance.status === "overdue").length,
     };
-  }, { pending: 0, unallocated: 0, debtors: 0, overdue: 0 }), [activeCases]);
+  }, { pending: 0, unallocated: 0, overdue: 0 }), [activeCases]);
 
   if (data.checking) return <div className="flex min-h-[320px] items-center justify-center text-slate-300">Cargando compras compartidas...</div>;
   if (!data.supabase) return <div className="rounded-2xl border border-red-900 bg-red-950/30 p-5 text-red-100">{data.configError ?? "Falta configurar Supabase."}</div>;
@@ -40,18 +43,26 @@ export function SharedPurchasesDashboard() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400"><span>{data.email ? `Sesión: ${data.email}` : "Compras compartidas"}</span><Button onClick={data.logout} variant="secondary">Salir</Button></div>
-      <div className="mt-6 flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold text-emerald-300">Control compartido</p><h1 className="mt-1 text-3xl font-semibold text-slate-100">Qué me deben y cuándo pueden pagar</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Las compras compartidas normales y las compras a tasa cero conservan procesos separados.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => setCreating("shared")}>+ Compra compartida</Button><Button variant="secondary" onClick={() => setCreating("installment")}>+ Compra a tasa cero</Button></div></div>
+      <div className="mt-6 flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold text-emerald-300">Control compartido</p><h1 className="mt-1 text-3xl font-semibold text-slate-100">Qué me deben y cuándo pueden pagar</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Las compras compartidas normales y las compras a tasa cero conservan procesos separados.</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => { setView("cases"); setCreating("shared"); }}>+ Compra compartida</Button><Button variant="secondary" onClick={() => { setView("cases"); setCreating("installment"); }}>+ Compra a tasa cero</Button></div></div>
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[['Total pendiente de recoger', formatMoney(global.pending)], ['Personas con saldo', global.debtors], ['Saldos vencidos', global.overdue], ['Aportes sin destinar', formatMoney(global.unallocated)]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{value}</p></article>)}
+        {[['Total pendiente de recoger', formatMoney(global.pending)], ['Personas con saldo', people.filter((person) => person.pending > 0).length], ['Saldos vencidos', global.overdue], ['Aportes sin destinar', formatMoney(global.unallocated)]].map(([label, value]) => <article key={String(label)} className="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-100">{value}</p></article>)}
       </section>
 
+      <div className="mt-6 flex gap-2" role="group" aria-label="Vista de compras con tarjeta">
+        <Button variant={view === "cases" ? "primary" : "secondary"} onClick={() => setView("cases")}>Casos</Button>
+        <Button variant={view === "people" ? "primary" : "secondary"} onClick={() => { setCreating(null); setView("people"); }}>Por persona</Button>
+      </div>
+
+      {view === "cases" ? <>
       <div className="mt-5"><ReminderSetup cards={data.cards} accounts={data.accounts} saving={data.saving} onCreateCard={data.createCard} onUpdateCard={data.updateCard} onDeleteCard={data.deleteCard} onCreateAccount={data.createAccount} onUpdateAccount={data.updateAccount} onDeleteAccount={data.deleteAccount} /></div>
       {creating === "shared" ? <div className="mt-5"><SharedCaseForm cards={data.cards} saving={data.saving} onSave={data.createCase} onCancel={() => setCreating(null)} /></div> : null}
       {creating === "installment" ? <div className="mt-5"><InstallmentCaseForm cards={data.cards} saving={data.saving} onSave={data.createCase} onCancel={() => setCreating(null)} /></div> : null}
+      </> : null}
       {data.error ? <div className="mt-5 rounded-2xl border border-red-900 bg-red-950/30 p-4 text-sm text-red-100">{data.error}</div> : null}
       {data.loading ? <p className="mt-5 text-sm text-slate-400">Actualizando...</p> : null}
 
+      {view === "people" ? <PersonBalancesView cases={activeCases} onOpenCase={setSelectedId} /> : <>
       <div className="mt-6 flex items-center justify-between gap-3"><h2 className="text-xl font-semibold text-slate-100">Casos compartidos</h2><button onClick={() => setShowClosed((value) => !value)} className="text-sm font-semibold text-slate-400 hover:text-slate-200">{showClosed ? "Solo activos" : "Incluir cerrados"}</button></div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {displayedCases.map((sharedCase) => {
@@ -64,6 +75,7 @@ export function SharedPurchasesDashboard() {
         })}
       </div>
       {!displayedCases.length && !data.loading ? <div className="mt-4 rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">Todavía no hay casos compartidos. Configura tu tarjeta y registra la primera compra.</div> : null}
+      </>}
     </div>
   );
 }
